@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
     base = Path(temp).resolve()
     source = base / "source ' $ checkout"
     source.mkdir()
-    for name in ['install.sh', 'locale.sh', 'preferred-language.js', 'convert.sh', 'hancom.applescript', 'word.applescript', 'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js', 'print-fit.sh', 'print-fit.js', 'review-model.js', 'document-review.js']:
+    for name in ['install.sh', 'locale.sh', 'preferred-language.js', 'convert.sh', 'conversion-session.sh', 'conversion-session.js', 'conversion-status.js', 'hancom.applescript', 'word.applescript', 'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js', 'print-fit.sh', 'print-fit.js', 'review-model.js', 'document-review.js']:
         shutil.copy2(REPO / name, source / name)
     shutil.copytree(REPO / 'PDF로 변환.workflow', source / 'PDF로 변환.workflow')
     shutil.copytree(REPO / '용지에 맞춰 인쇄.workflow', source / '용지에 맞춰 인쇄.workflow')
@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
     result = run(home)
     target = home / 'Library/Services/PDF로 변환.workflow'
     resources = target / 'Contents/Resources'
-    check(result.returncode == 0 and all((resources / name).is_file() and (resources / name).read_bytes() == (source / name).read_bytes() for name in ('image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js', 'excel.applescript')), 'fresh alternate HOME install includes every renderer')
+    check(result.returncode == 0 and all((resources / name).is_file() and (resources / name).read_bytes() == (source / name).read_bytes() for name in ('image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js', 'excel.applescript', 'conversion-session.sh', 'conversion-session.js', 'conversion-status.js')), 'fresh alternate HOME install includes every renderer')
     check((target / 'Contents/project').is_symlink(), 'ownership marker installed')
     localized = ('en.lproj/InfoPlist.strings', 'ko.lproj/InfoPlist.strings')
     obsolete = ('en.lproj/ServicesMenu.strings', 'ko.lproj/ServicesMenu.strings')
@@ -172,7 +172,7 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
 
     # Every added resource participates in preflight and destination checks;
     # a missing helper must not partially replace an existing installation.
-    for helper in ('csv.js', 'excel.applescript', 'dng.js', 'locale.sh', 'preferred-language.js', 'print-fit.sh', 'print-fit.js', 'review-model.js', 'document-review.js'):
+    for helper in ('conversion-session.sh', 'conversion-session.js', 'conversion-status.js', 'csv.js', 'excel.applescript', 'dng.js', 'locale.sh', 'preferred-language.js', 'print-fit.sh', 'print-fit.js', 'review-model.js', 'document-review.js'):
         installed_before = (resources / 'convert.sh').read_bytes()
         (source / helper).rename(source / (helper + '.hidden'))
         result = run(home)

@@ -23,6 +23,7 @@ selection=''
 review_app="$script_dir/Finder PDF Review.app"
 work_dir=''
 stage_file=''
+preparation_pid=''
 
 # Translate this action's boundary messages without interpreting file names.
 fit_text() {
@@ -68,9 +69,20 @@ fit_cleanup() {
     [[ -z $stage_file ]] || /bin/rm -f -- "$stage_file"
     [[ -z $work_dir ]] || /bin/rm -r -- "$work_dir"
 }
+# Stop only this action's owned preparation session. That session waits for its
+# active document to finish and closes its monitor before snapshots are removed.
+fit_stop() {
+    local status=$1
+    if [[ -n $preparation_pid ]]; then
+        /bin/kill -TERM "$preparation_pid" 2>/dev/null || true
+        wait "$preparation_pid" || true
+        preparation_pid=''
+    fi
+    exit "$status"
+}
 trap fit_cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM HUP
+trap 'fit_stop 130' INT
+trap 'fit_stop 143' TERM HUP
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -152,6 +164,7 @@ work_dir=$(/usr/bin/mktemp -d /private/tmp/fpdf-print.XXXXXX) || {
 # preserve names and order even when documents share a basename or extension.
 pdfs=()
 conversion_inputs=()
+preparation_inputs=()
 for ((index=0; index<${#sources[@]}; index++)); do
     source=${sources[$index]}
     name=${names[$index]}
@@ -162,6 +175,7 @@ for ((index=0; index<${#sources[@]}; index++)); do
        [[ -L $copy || ! -f $copy || ! -r $copy || ! -O $copy ]]; then
         fit_report "$(fit_text stopped)"$'\n'"$(fpdf_text failed "$name" "$(fpdf_text copy)")"; exit 1
     fi
+    preparation_inputs+=("$copy")
     if [[ ${extensions[$index]} == pdf ]]; then
         pdfs+=("$copy")
     else
@@ -170,9 +184,39 @@ for ((index=0; index<${#sources[@]}; index++)); do
     fi
 done
 
-# The converter writes only beside snapshots. Never consult an adjacent PDF at
-# the original location, even when it already exists or the export fails.
-if [[ ${#conversion_inputs[@]} -gt 0 ]]; then
+# Interactive preparation shares the conversion progress/retry session. Its
+# original-to-snapshot map lets only failed inputs refresh after user repairs;
+# successfully prepared snapshots stay stable through the later review.
+if [[ -z $proof && -z $output ]]; then
+    if [[ ! -r $script_dir/conversion-session.sh ]]; then fit_report "$(fit_text missing)"; exit 2; fi
+    prepare_mode=print
+    [[ $merge == 0 ]] || prepare_mode=merge
+    if ! /usr/bin/osascript -l JavaScript - "$work_dir/refresh.json" "${#sources[@]}" "${sources[@]}" "${preparation_inputs[@]}" <<'JXA' >"$work_dir/conversion.log" 2>&1
+ObjC.import('Foundation');
+/** Preserve original/snapshot pairs as JSON data, including arbitrary file names. */
+function run(argv) {
+    const count = Number(argv[1]);
+    const files = [];
+    for (let i = 0; i < count; i++) files.push({source: argv[2 + i], snapshot: argv[2 + count + i]});
+    if (!$(JSON.stringify(files)).writeToFileAtomicallyEncodingError(argv[0], true, $.NSUTF8StringEncoding, null)) throw Error('Cannot write preparation map');
+}
+JXA
+    then fit_report "$(fit_text stopped)"; exit 1; fi
+    /bin/bash "$script_dir/conversion-session.sh" --prepare-pdfs "$prepare_mode" --refresh-manifest "$work_dir/refresh.json" -- "${preparation_inputs[@]}" >>"$work_dir/conversion.log" 2>&1 &
+    preparation_pid=$!
+    wait "$preparation_pid"
+    preparation_status=$?
+    preparation_pid=''
+    case $preparation_status in
+        0) ;;
+        130) exit 0 ;;
+        # The native failure result was already acknowledged; do not trigger a second Finder error.
+        1) exit 0 ;;
+        *) fit_report "$(fit_text stopped)"$'\n'"$(cat "$work_dir/conversion.log")"; exit 2 ;;
+    esac
+# Headless proofs/explicit merged outputs keep the noninteractive converter.
+# It writes only beside snapshots, never consulting adjacent original PDFs.
+elif [[ ${#conversion_inputs[@]} -gt 0 ]]; then
     if ! /bin/bash "$script_dir/convert.sh" --no-dialog -- "${conversion_inputs[@]}" >"$work_dir/conversion.log" 2>&1; then
         fit_report "$(fit_text stopped)"$'\n'"$(cat "$work_dir/conversion.log")"; exit 1
     fi

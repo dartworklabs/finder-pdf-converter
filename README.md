@@ -58,7 +58,7 @@ Control-click or right-click a file in Finder and open **Quick Actions → Custo
 Start with a PNG, which needs no additional app. Put a PNG, such as a screenshot, in a folder you can write to. Make sure there is no PDF with the same base name in that folder.
 
 1. Control-click or right-click the PNG in Finder and choose **Quick Actions → Convert to PDF** (**빠른 동작 → PDF로 변환** in Korean).
-2. Check that the result dialog says **Completed: 1 · Skipped: 0 · Failed: 0** (**완료 1개 · 건너뜀 0개 · 실패 0개** in Korean).
+2. Check that the progress window shows one completed file and no skipped or failed files, then click **Done** (**완료** in Korean).
 3. Check that a PDF with the same base name appears beside the PNG. Open it and confirm that the image is visible.
 
 If a PDF with that name already exists, the converter skips the file. Try another PNG or rename the existing PDF before trying again.
@@ -109,9 +109,9 @@ Select PDFs, or any source format in the table above, then choose **Quick Action
 
 Each page is reduced only when needed to fit the selected printer’s printable area, centered, and rotated automatically when that gives a better fit. Small pages are not enlarged. The printable area comes from the printer driver, so it can differ by printer and paper. Original page margins remain part of the page; this action does not crop them away. The action sets job scaling to 100% and one page per sheet. Printer-specific driver settings can still affect the final output.
 
-The initial document order comes from Finder. Printing follows the order and page selections accepted in the review window. Identical file names are prepared separately. PDFs are read from private copies; other formats are converted using the same apps and limits described below. Save unsaved edits before starting. Unsupported, unreadable, symbolic-link, folder, or invalid inputs stop the entire batch before a print panel opens. A conversion failure also stops the batch; it never silently prints only the successful files.
+The initial document order comes from Finder. Printing follows the order and page selections accepted in the review window. Identical file names are prepared separately. PDFs are read from private copies; other formats are converted using the same apps and limits described below. Save unsaved edits before starting. Unsupported, unreadable, symbolic-link, folder, or invalid inputs stop the entire batch before a print panel opens. Preparation shows the current file, overall progress, and each result. If conversion or PDF validation fails, repair and save the failed original, then choose **Retry Failed**. Only failed inputs are reread; successful private copies stay unchanged. Review opens only after every input is ready. Cancelling preparation creates no print job. Closing a preparation failure result finishes the action without a second Finder error.
 
-Print to Fit creates no PDF beside a source and never uses an existing adjacent PDF as a substitute for converting that source. Temporary copies and intermediate PDFs are removed after the panel closes or preparation fails. Its preparation errors follow the same Finder/macOS language selection as conversion results. The review window and native save panel use the selected Finder/macOS language. The native print panel follows macOS’s own language settings.
+Print to Fit creates no PDF beside a source and never uses an existing adjacent PDF as a substitute for converting that source. Temporary copies and intermediate PDFs are removed when the action closes, including cancellation or a failed preparation that you close. Its preparation errors follow the same Finder/macOS language selection as conversion results. The review window and native save panel use the selected Finder/macOS language. The native print panel follows macOS’s own language settings.
 
 For a first check, select a PDF you can recognize, open Print to Fit, check the printer and paper settings, then cancel. For a small physical test, select a single-page document, open Print to Fit, choose the intended printer and paper, and print it. A proof PDF check alone does not verify paper feed or the physical printer’s output.
 
@@ -119,13 +119,13 @@ For a first check, select a PDF you can recognize, open Print to Fit, check the 
 
 Select PDFs or supported source files in Finder and choose **Quick Actions → Merge PDFs** (**빠른 동작 → PDF 합치기** in Korean). The same review window lets you preview pages, reorder or omit documents, and select page ranges. Click **Save PDF…** and choose a new PDF filename. Existing files and symbolic links are never replaced, including a name created by another writer while the PDF is being prepared. Cancelling saves nothing.
 
-The merged PDF keeps the selected pages’ original sizes and rotations; it does not resize pages to printer paper. Supported source formats are converted in private copies first. An invalid or failed input stops the entire batch, including inputs later omitted in review. Original files and any PDFs beside them remain untouched. Merge does not require a printer.
+The merged PDF keeps the selected pages’ original sizes and rotations; it does not resize pages to printer paper. Supported source formats are converted in private copies first. Preparation uses the same progress, cancellation, and failed-only retry window as Print to Fit. An invalid or failed input prevents review and saving until repaired, including inputs you might later omit in review. Original files and any PDFs beside them remain untouched. Merge does not require a printer.
 
 ## Use
 
-Select files in Finder, Control-click or right-click, and choose **Quick Actions → Convert to PDF** (**빠른 동작 → PDF로 변환** in Korean). Each PDF is saved beside its source with the same base name: for example, `report.docx` becomes `report.pdf`. Selecting multiple files creates a separate PDF for each file; it does not merge them. The result dialog shows completed, skipped, and failed counts, along with a result for each file. Its title, confirmation button, and converter-authored reasons use the same language. File names and paths retain their original spelling; unrecognized app or macOS diagnostics may appear verbatim beneath **Technical details**.
+Select files in Finder, Control-click or right-click, and choose **Quick Actions → Convert to PDF** (**빠른 동작 → PDF로 변환** in Korean). Each PDF is saved beside its source with the same base name: for example, `report.docx` becomes `report.pdf`. Selecting multiple files creates a separate PDF for each file; it does not merge them. The progress window shows the current file, processed/total count, and per-file status. When conversion finishes, it shows completed, skipped, and failed counts. Repair and save a failed original, then choose **Retry Failed** to retry only failures; completed and skipped files are left alone. **Done** finishes the session. If macOS blocks access after a repair or file replacement, close the window, reselect the repaired file in Finder, and run the action again. The window and converter-authored reasons use the selected Finder/macOS language. File names and paths retain their original spelling; unrecognized app or macOS diagnostics may appear verbatim beneath **Technical details**.
 
-Existing PDFs are never overwritten. If you select files with the same base name in the same folder, such as `report.docx` and `report.png`, the first successful conversion creates `report.pdf` and the others are skipped. Unsupported file types are skipped. Unreadable files, symbolic links, and corrupt files are reported as failures. A failure does not stop the remaining files from being processed.
+Existing PDFs are never overwritten. If you select files with the same base name in the same folder, such as `report.docx` and `report.png`, the first successful conversion creates `report.pdf` and the others are skipped. Unsupported file types are skipped. Unreadable files, symbolic links, and corrupt files are reported as failures. A failure does not stop the remaining files from being processed. **Cancel** lets the active file finish and closes its temporary document before stopping the remaining files. PDFs already saved stay in place; pending files are marked cancelled. Closing the window during conversion requests the same safe cancellation.
 
 Conversion uses temporary copies of the source files. Documents you already have open in Hancom HWP, Word, PowerPoint, or Excel are left open; only the conversion copies are closed. Unsaved changes in those apps are not included, so save the latest version to the source file before converting. If another conversion is already running, a message asks you to wait for it to finish and try again.
 
@@ -205,7 +205,7 @@ Exit codes are `0` when all files succeed or are skipped, `1` when any file fail
 bash "$HOME/Library/Services/PDF로 변환.workflow/Contents/Resources/print-fit.sh" -- "/absolute/path/report.pdf" "/absolute/path/photo.heic"
 ```
 
-Use the installed entry above for interactive review: it has the compiled helper beside it. This opens the same review window and print panel as Finder. `--no-dialog` suppresses error alerts, but keeps both windows. To exercise conversion and the same page renderer without submitting a physical job, give a new proof PDF path:
+Use the installed entry above for interactive review: it has the compiled helper beside it. This opens the same review window and print panel as Finder. `--no-dialog` suppresses error alerts, but keeps the preparation, review, and print windows. To exercise conversion and the same page renderer without submitting a physical job, give a new proof PDF path:
 
 ```sh
 bash ./print-fit.sh --proof "/absolute/path/new-proof.pdf" -- "/absolute/path/report.pdf" "/absolute/path/report.docx"
@@ -222,6 +222,20 @@ bash ./print-fit.sh --merge --output "/absolute/path/new-merged.pdf" -- "/absolu
 `--merge --output` merges all pages without opening windows and needs no printer. Omit `--output` and use the installed entry to open the merge review window instead. `--proof` stays noninteractive and uses printer sizing; it cannot be combined with `--merge` or `--output`.
 
 For automated checks, add `--selection "/absolute/path/selection.json"` to a proof or an explicit merge output. The UTF-8 JSON format is `{"version":1,"cancelled":false,"files":[{"index":1,"pages":[2,1]},{"index":0,"pages":[1]}]}`. Indices refer to the zero-based input order; pages are one-based and emitted in the listed order. Every included document and page must appear at most once. Invalid selections reject the whole batch. These noninteractive modes work directly from the checkout without a compiled review app.
+
+## Verify progress and retry
+
+The reproducible checks and the distinction between automated fixtures and actual Finder testing are recorded in [Progress verification](verification/PROGRESS.md). On macOS, run the focused checks from this folder:
+
+```sh
+bash verification/verify-progress.sh
+python3 verification/verify-refresh-messages.py
+python3 verification/verify-session-lifecycle.py
+node verification/verify-progress-ui.js
+python3 verification/verify-preparation-entry.py
+```
+
+These checks use disposable files and owned adapters; they do not submit physical print jobs. Python 3 and Node.js are required. Installation, diagnostic, native proof and manual Finder checks are listed in the verification record.
 
 ## License
 

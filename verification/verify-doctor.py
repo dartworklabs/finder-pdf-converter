@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 
 REPO = Path(__file__).resolve().parents[1]
-HELPERS = ('locale.sh', 'preferred-language.js', 'convert.sh', 'hancom.applescript', 'word.applescript',
+HELPERS = ('locale.sh', 'preferred-language.js', 'convert.sh', 'conversion-session.sh', 'conversion-session.js', 'conversion-status.js', 'hancom.applescript', 'word.applescript',
            'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js',
            'text.js', 'markdown.js', 'csv.js', 'print-fit.sh', 'print-fit.js', 'review-model.js', 'document-review.js')
 
@@ -99,6 +99,13 @@ with tempfile.TemporaryDirectory(prefix='fpdf-doctor-') as temp:
     (resources / 'dng.js').write_text('stale DNG adapter\n')
     run(1, 'stale DNG adapter rejected')
     shutil.copy2(REPO / 'dng.js', resources / 'dng.js')
+    for helper in ('conversion-session.sh', 'conversion-session.js', 'conversion-status.js'):
+        original_helper = (resources / helper).read_bytes()
+        (resources / helper).unlink()
+        run(1, f'missing {helper} rejected without writes')
+        (resources / helper).write_text('stale progress helper\n')
+        run(1, f'stale {helper} rejected without writes')
+        (resources / helper).write_bytes(original_helper)
     (target / 'Contents/document.wflow').write_text('stale workflow\n')
     run(1, 'stale workflow metadata rejected')
     run(2, 'unexpected argument rejected', '--unexpected')

@@ -9,6 +9,20 @@ export PATH
 
 show_dialog=1
 if [[ ${1-} == --no-dialog ]]; then show_dialog=0; shift; fi
+progress_dir=''
+attempt=1
+indices=''
+prepare_pdfs=''
+while [[ ${1-} == --progress-dir || ${1-} == --attempt || ${1-} == --indices || ${1-} == --prepare-pdfs ]]; do
+    option=$1; [[ $# -ge 2 ]] || exit 2
+    case $option in
+        --progress-dir) progress_dir=$2 ;;
+        --attempt) attempt=$2 ;;
+        --indices) indices=$2 ;;
+        --prepare-pdfs) prepare_pdfs=$2; [[ $prepare_pdfs == print || $prepare_pdfs == merge ]] || exit 2 ;;
+    esac
+    shift 2
+done
 if [[ ${1-} == -- ]]; then shift; fi
 script_dir=$(CDPATH='' cd -P -- "$(dirname -- "$0")" && pwd) || exit 2
 if [[ ! -r $script_dir/locale.sh ]]; then
@@ -32,6 +46,7 @@ summary=''
 succeeded=0
 skipped=0
 failed=0
+cancelled=0
 
 # Remove only this invocation's private files and owned lock, also on signals.
 cleanup() {
@@ -49,7 +64,10 @@ trap 'exit 143' TERM HUP
 
 # Record a human-readable per-file result without interpreting names as code.
 record() {
-    summary+="$1"$'\n'
+    summary+="$2"$'\n'
+    if [[ -n $progress_dir ]]; then
+        /usr/bin/osascript -l JavaScript "$script_dir/conversion-status.js" update "$progress_dir/status.json" "$index" "$1" "$2" || exit 2
+    fi
 }
 
 # Print one summary and display that same text once for Finder. A UI failure
@@ -172,12 +190,40 @@ prepare_office_workspace() {
     fi
 }
 
+if [[ -n $progress_dir ]]; then
+    [[ -d $progress_dir && ! -L $progress_dir && -O $progress_dir && -r $script_dir/conversion-status.js ]] || exit 2
+    [[ $(/usr/bin/stat -f %Lp "$progress_dir") == 700 ]] || exit 2
+    [[ $attempt =~ ^[1-9][0-9]*$ ]] || exit 2
+    if [[ -z $indices ]]; then
+        indices=''; for ((n=1; n<=$#; n++)); do indices+="${indices:+,}$n"; done
+    fi
+    /usr/bin/osascript -l JavaScript "$script_dir/conversion-status.js" init "$progress_dir/status.json" "$attempt" "$indices" "$@" || exit 2
+fi
 index=0
 for selected in "$@"; do
+    if [[ -n $progress_dir && -e $progress_dir/cancel ]]; then cancelled=1; break; fi
     index=$((index + 1))
     name=${selected##*/}
+    if [[ -n $progress_dir ]]; then
+        /usr/bin/osascript -l JavaScript "$script_dir/conversion-status.js" start "$progress_dir/status.json" "$index" || exit 2
+    fi
     if [[ -L $selected || ! -f $selected || ! -r $selected ]]; then
-        failed=$((failed + 1)); record "$(fpdf_text failed "$name" "$(fpdf_text not_readable)")"
+        failed=$((failed + 1)); record failed "$(fpdf_text failed "$name" "$(fpdf_text not_readable)")"
+        continue
+    fi
+    if [[ -n $prepare_pdfs && ${name##*.} =~ ^[Pp][Dd][Ff]$ ]]; then
+        if /usr/bin/osascript -l JavaScript - "$selected" "$prepare_pdfs" <<'JXA' >/dev/null 2>&1
+ObjC.import('Foundation'); ObjC.import('PDFKit');
+function run(a) {
+    const pdf=$.PDFDocument.alloc.initWithURL($.NSURL.fileURLWithPath(a[0]));
+    if (!pdf || pdf.isNil() || pdf.isLocked || Number(pdf.pageCount)<1 || (a[1]==='print' && !pdf.allowsPrinting) || (a[1]==='merge' && !pdf.allowsCopying)) throw Error('PDF unavailable');
+}
+JXA
+        then
+            succeeded=$((succeeded + 1)); record completed "$(fpdf_text completed "$name" "$name")"
+        else
+            failed=$((failed + 1)); record failed "$(fpdf_text failed "$name" "$(fpdf_text invalid_pdf)")"
+        fi
         continue
     fi
     ext=$(printf '%s' "${name##*.}" | /usr/bin/tr '[:upper:]' '[:lower:]')
@@ -190,7 +236,7 @@ for selected in "$@"; do
         png|jpg|jpeg|heic|heif) adapter=image.js ;;
         dng) adapter=dng.js ;;
         txt|md|markdown) adapter=text.js ;;
-        *) skipped=$((skipped + 1)); record "$(fpdf_text skipped "$name" "$(fpdf_text unsupported)")"; continue ;;
+        *) skipped=$((skipped + 1)); record skipped "$(fpdf_text skipped "$name" "$(fpdf_text unsupported)")"; continue ;;
     esac
     # Parameter expansion and a sentinel preserve trailing newlines, which
     # command substitution would otherwise strip from dirname/pwd output.
@@ -199,17 +245,17 @@ for selected in "$@"; do
         *) selected_directory=. ;;
     esac
     directory=$(CDPATH='' cd -P -- "$selected_directory" && printf '%s.' "$PWD") || {
-        failed=$((failed + 1)); record "$(fpdf_text failed "$name" "$(fpdf_text source_folder)")"; continue
+        failed=$((failed + 1)); record failed "$(fpdf_text failed "$name" "$(fpdf_text source_folder)")"; continue
     }
     directory=${directory%.}
     input="$directory/$name"
     output="$directory/${name%.*}.pdf"
     if [[ -e $output || -L $output ]]; then
-        skipped=$((skipped + 1)); record "$(fpdf_text skipped "$name" "$(fpdf_text exists)")"
+        skipped=$((skipped + 1)); record skipped "$(fpdf_text skipped "$name" "$(fpdf_text exists)")"
         continue
     fi
     if [[ ! -r $script_dir/$adapter ]]; then
-        failed=$((failed + 1)); record "$(fpdf_text failed "$name" "$(fpdf_text missing_adapter)")"
+        failed=$((failed + 1)); record failed "$(fpdf_text failed "$name" "$(fpdf_text missing_adapter)")"
         continue
     fi
     app_work_dir=$work_dir
@@ -221,7 +267,7 @@ for selected in "$@"; do
         *) office_application='' ;;
     esac
     if [[ -n $office_application ]] && ! prepare_office_workspace "$office_application" "$office_container"; then
-        failed=$((failed + 1)); record "$(fpdf_text failed "$name" "$(fpdf_text office_folder "$office_application")")"
+        failed=$((failed + 1)); record failed "$(fpdf_text failed "$name" "$(fpdf_text office_folder "$office_application")")"
         continue
     fi
     if [[ $flat_workspace == 1 ]]; then
@@ -229,7 +275,7 @@ for selected in "$@"; do
         # another so a folder-level native Office grant survives later batches.
         office_prefix=$(/usr/bin/mktemp "$app_work_dir/fpdf.XXXXXXXX") || office_prefix=''
         if [[ -z $office_prefix ]]; then
-            failed=$((failed + 1)); record "$(fpdf_text failed "$name" "$(fpdf_text office_file)")"
+            failed=$((failed + 1)); record failed "$(fpdf_text failed "$name" "$(fpdf_text office_file)")"
             continue
         fi
         copy="$office_prefix.$ext"
@@ -241,14 +287,14 @@ for selected in "$@"; do
     fi
     error_file="$work_dir/error-$index.txt"
     if ! /bin/cp -p -- "$input" "$copy"; then
-        failed=$((failed + 1)); record "$(fpdf_text failed "$name" "$(fpdf_text copy)")"
+        failed=$((failed + 1)); record failed "$(fpdf_text failed "$name" "$(fpdf_text copy)")"
         continue
     fi
     if [[ $ext == xlsx ]]; then
         # Excel's AppleScript read-only flag alone does not make writable files
         # read-only. Restrict only this owned private copy before opening it.
         if ! /bin/chmod 400 "$copy"; then
-            failed=$((failed + 1)); record "$(fpdf_text failed "$name" "$(fpdf_text excel_readonly)")"
+            failed=$((failed + 1)); record failed "$(fpdf_text failed "$name" "$(fpdf_text excel_readonly)")"
             continue
         fi
     else
@@ -258,7 +304,7 @@ for selected in "$@"; do
         # Combine only installed, trusted scripts in this private workspace;
         # user file contents and paths remain data passed as arguments.
         if [[ ! -r $script_dir/markdown.js || ! -r $script_dir/csv.js ]] || ! { /bin/cat "$script_dir/markdown.js"; printf '\n'; /bin/cat "$script_dir/csv.js"; printf '\n'; /bin/cat "$script_dir/text.js"; } > "$work_dir/text-adapter.js"; then
-            failed=$((failed + 1)); record "$(fpdf_text failed "$name" "$(fpdf_text missing_adapter)")"
+            failed=$((failed + 1)); record failed "$(fpdf_text failed "$name" "$(fpdf_text missing_adapter)")"
             continue
         fi
         /usr/bin/osascript -l JavaScript "$work_dir/text-adapter.js" "$copy" "$temporary_pdf" >"$work_dir/adapter-$index.txt" 2>"$error_file"
@@ -272,11 +318,11 @@ for selected in "$@"; do
         # Retain the existing diagnostic size bound without splitting a UTF-8
         # character, which would prevent the native dialog decoding the report.
         reason=$(/usr/bin/head -c 700 -- "$error_file" | /usr/bin/iconv -c -f UTF-8 -t UTF-8 2>/dev/null)
-        failed=$((failed + 1)); record "$(fpdf_text failed "$name" "$(fpdf_adapter_reason "$reason" "$ext")")"
+        failed=$((failed + 1)); record failed "$(fpdf_text failed "$name" "$(fpdf_adapter_reason "$reason" "$ext")")"
         continue
     fi
     if ! validate_pdf "$temporary_pdf"; then
-        failed=$((failed + 1)); record "$(fpdf_text failed "$name" "$(fpdf_text invalid_pdf)")"
+        failed=$((failed + 1)); record failed "$(fpdf_text failed "$name" "$(fpdf_text invalid_pdf)")"
         continue
     fi
     # Stage on the destination filesystem and publish with an exclusive atomic
@@ -285,19 +331,25 @@ for selected in "$@"; do
     if [[ -z $stage_file ]] || ! /bin/cp -- "$temporary_pdf" "$stage_file" || ! /usr/bin/cmp -s -- "$temporary_pdf" "$stage_file"; then
         [[ -z $stage_file ]] || /bin/rm -- "$stage_file"
         stage_file=''
-        failed=$((failed + 1)); record "$(fpdf_text failed "$name" "$(fpdf_text stage)")"
+        failed=$((failed + 1)); record failed "$(fpdf_text failed "$name" "$(fpdf_text stage)")"
         continue
     fi
     if publish_pdf "$stage_file" "$output"; then
         stage_file=''
-        succeeded=$((succeeded + 1)); record "$(fpdf_text completed "$name" "${name%.*}.pdf")"
+        succeeded=$((succeeded + 1)); record completed "$(fpdf_text completed "$name" "${name%.*}.pdf")"
     elif [[ -e $output || -L $output ]]; then
-        skipped=$((skipped + 1)); record "$(fpdf_text skipped "$name" "$(fpdf_text race)")"
+        skipped=$((skipped + 1)); record skipped "$(fpdf_text skipped "$name" "$(fpdf_text race)")"
     else
-        failed=$((failed + 1)); record "$(fpdf_text failed "$name" "$(fpdf_text publish)")"
+        failed=$((failed + 1)); record failed "$(fpdf_text failed "$name" "$(fpdf_text publish)")"
     fi
     [[ -z $stage_file ]] || /bin/rm -- "$stage_file"
     stage_file=''
 done
+if [[ -n $progress_dir ]]; then
+    if [[ -e $progress_dir/cancel ]]; then cancelled=1; fi
+    phase=complete; [[ $cancelled == 0 ]] || phase=cancelled
+    /usr/bin/osascript -l JavaScript "$script_dir/conversion-status.js" finish "$progress_dir/status.json" "$phase" || exit 2
+fi
 report "$(fpdf_text summary "$succeeded" "$skipped" "$failed")"$'\n\n'"${summary%$'\n'}"
+[[ $cancelled == 0 ]] || exit 130
 [[ $failed == 0 ]]

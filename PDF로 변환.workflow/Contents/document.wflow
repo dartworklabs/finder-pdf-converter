@@ -59,57 +59,37 @@
 				<key>ActionParameters</key>
 				<dict>
 					<key>COMMAND_STRING</key>
-					<string># Run the installed copy and show its summary from Finder.
+					<string># The session owns progress, cancellation, per-file results and failed-only retry.
 workflow="$HOME/Library/Services/PDF로 변환.workflow"
 source="$workflow/Contents/Resources"
-# English is the fallback if the shared language resources are missing.
 fpdf_locale=en
+title='PDF Conversion Results'
+button='OK'
 if [ -r "$source/locale.sh" ]; then
   . "$source/locale.sh"
   fpdf_locale=$(fpdf_language "$source/preferred-language.js")
   title=$(fpdf_text title)
   button=$(fpdf_text ok)
-else
-  title='PDF Conversion Results'
-  button='OK'
 fi
-if [ ! -f "$source/convert.sh" ] || [ ! -r "$source/locale.sh" ]; then
-  if [ -r "$source/locale.sh" ]; then
-    summary=$(fpdf_text missing_converter)
-  else
-    summary='The PDF converter could not be found. Reinstall the Quick Action.'
-  fi
-  status=2
-else
-  summary=$(/bin/bash "$source/convert.sh" --no-dialog "$@" 2&gt;&amp;1)
-  status=$?
-fi
-if [ -z "$summary" ]; then
-  summary=$(fpdf_text launch_failed "$status")
-fi
-# Keep potentially large result text out of the process argument list.
-if ! printf '%s' "$summary" | /usr/bin/osascript -l JavaScript -e '
-ObjC.import("Foundation");
-ObjC.import("AppKit");
-/** Display UTF-8 result data from stdin with trusted localized UI labels. */
-function run(argv) {
-  const data = $.NSFileHandle.fileHandleWithStandardInput.readDataToEndOfFile;
-  const message = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding));
-  const app = $.NSApplication.sharedApplication;
-  app.setActivationPolicy($.NSApplicationActivationPolicyRegular);
-  const alert = $.NSAlert.alloc.init;
-  alert.messageText = argv[0];
-  alert.informativeText = message;
-  alert.addButtonWithTitle(argv[1]);
-  app.activateIgnoringOtherApps(true);
-  alert.runModal;
+# Startup errors are the only alerts this wrapper presents.
+show_startup_error() {
+  printf '%s\n' "$1" &gt;&amp;2
+  /usr/bin/osascript -e 'on run argv
+    display dialog (item 1 of argv) with title (item 2 of argv) buttons {(item 3 of argv)} default button (item 3 of argv)
+  end run' "$1" "$title" "$button" &gt;/dev/null 2&gt;&amp;1 || true
 }
-' "$title" "$button"
-then
-  printf '%s\n' "$summary" &gt;&amp;2
-  exit 1
+if [ ! -f "$source/conversion-session.sh" ] || [ ! -r "$source/locale.sh" ]; then
+  message='The PDF converter could not be found. Reinstall the Quick Action.'
+  if [ -r "$source/locale.sh" ]; then message=$(fpdf_text missing_converter); fi
+  show_startup_error "$message"
+  exit 2
 fi
-exit 0</string>
+/bin/bash "$source/conversion-session.sh" -- "$@"
+status=$?
+# File failures and cancellation were already presented by the session.
+if [ "$status" -eq 1 ] || [ "$status" -eq 130 ]; then exit 0; fi
+if [ "$status" -eq 2 ]; then show_startup_error "$(fpdf_text launch_failed "$status")"; fi
+exit "$status"</string>
 					<key>CheckedForUserDefaultShell</key>
 					<true/>
 					<key>inputMethod</key>

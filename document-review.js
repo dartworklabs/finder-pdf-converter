@@ -4,6 +4,7 @@ ObjC.import('PDFKit');
 ObjC.import('Foundation');
 
 var review = null;
+var progress = null;
 var strings = {
     en: {
         title: 'Review Documents',
@@ -256,6 +257,9 @@ function loadManifest(path) {
     if (bytes.isNil() || Number(bytes.length) > 1048576) throw new Error('Cannot read manifest.');
     var text = $.NSString.alloc.initWithDataEncoding(bytes, $.NSUTF8StringEncoding);
     var manifest = JSON.parse(ObjC.unwrap(text));
+    if (manifest && manifest.version === 1 && manifest.mode === 'progress') {
+        return loadProgressManifest(manifest);
+    }
     if (!manifest || manifest.version !== 1 ||
         !['print', 'merge'].includes(manifest.mode) ||
         !['en', 'ko'].includes(manifest.language) ||
@@ -305,6 +309,11 @@ function run(argv) {
     $.NSApplication.sharedApplication;
     $.NSApp.setActivationPolicy(0);
     $.NSApp.finishLaunching;
+    if (review.manifest.mode === 'progress') {
+        progress = review;
+        runProgress();
+        return;
+    }
     review.handler = $.FinderPDFReviewController.alloc.init;
     var window = $.NSWindow.alloc.initWithContentRectStyleMaskBackingDefer(
         $.NSMakeRect(0, 0, 980, 700), 7, 2, false
@@ -357,5 +366,257 @@ function run(argv) {
     window.orderFrontRegardless;
     window.makeMainWindow;
     $.NSApp.activateIgnoringOtherApps(true);
+    $.NSApp.runModalForWindow(window);
+}
+
+/* The progress window talks only through files in the caller's private session. */
+var progressStrings = {
+    en: {
+        title: 'Converting Documents', running: 'Converting documents…',
+        retrying: 'Retrying failed files', cancelling: 'Cancelling after the current document…',
+        complete: 'Conversion finished', cancelled: 'Conversion cancelled',
+        error: 'Conversion stopped', unavailable: 'Progress is unavailable. Cancellation was requested.',
+        cancel: 'Cancel', done: 'Done', retry: 'Retry Failed',
+        completed: 'Completed', skipped: 'Skipped', failed: 'Failed', pending: 'Waiting',
+        active: 'Converting', stopped: 'Cancelled', of: 'of', files: 'files', file: 'file'
+    },
+    ko: {
+        title: '문서 변환', running: '문서를 변환하고 있습니다…',
+        retrying: '실패한 파일 다시 변환', cancelling: '현재 문서를 마친 후 취소합니다…',
+        complete: '변환 완료', cancelled: '변환 취소됨',
+        error: '변환이 중단되었습니다', unavailable: '진행 상태를 읽을 수 없어 취소를 요청했습니다.',
+        cancel: '취소', done: '완료', retry: '실패 항목 재시도',
+        completed: '완료', skipped: '건너뜀', failed: '실패', pending: '대기 중',
+        active: '변환 중', stopped: '취소됨', of: '/', files: '개 파일', file: '개 파일'
+    }
+};
+
+/** Validate the paths given by the private session before showing a window. */
+function loadProgressManifest(manifest) {
+    if (!['en', 'ko'].includes(manifest.language) ||
+        (manifest.autoCloseOnSuccess !== undefined && typeof manifest.autoCloseOnSuccess !== 'boolean') ||
+        !['statusPath', 'commandPath', 'cancelPath', 'readyPath', 'shutdownPath'].every(function (key) {
+            return typeof manifest[key] === 'string' && manifest[key][0] === '/';
+        })) throw new Error('Invalid progress manifest.');
+    return {manifest: manifest, t: progressStrings[manifest.language], attempt: 0,
+        phase: 'running', cancelling: false, retryPending: false, finished: false};
+}
+
+/** Replace a session file atomically so the reader never observes partial JSON. */
+function writeProgressFile(path, value) {
+    var data = $(JSON.stringify(value)).dataUsingEncoding($.NSUTF8StringEncoding);
+    if (!data.writeToFileOptionsError($(path), 1, null)) throw new Error('Cannot write session file.');
+}
+
+/** Atomically create an empty marker understood by the session worker. */
+function writeProgressMarker(path) {
+    if (!$.NSData.data.writeToFileOptionsError($(path), 1, null)) throw new Error('Cannot write session marker.');
+}
+
+/** Send a command tied to the displayed attempt. */
+function progressCommand(action) {
+    writeProgressFile(progress.manifest.commandPath,
+        {version: 1, attempt: progress.attempt, action: action});
+}
+
+/** Ask the worker to stop before starting another document. */
+function requestProgressCancel() {
+    if (progress.cancelling) return;
+    try {
+        writeProgressMarker(progress.manifest.cancelPath);
+        progressCommand('cancel');
+        progress.cancelling = true;
+        progress.heading.stringValue = $(progress.t.cancelling);
+        progress.cancelButton.enabled = false;
+    } catch (error) {
+        reviewAlert(String(error));
+    }
+}
+
+/** Parse a bounded status snapshot, rejecting invalid or inconsistent counts. */
+function readProgressStatus() {
+    var bytes = $.NSData.dataWithContentsOfFile($(progress.manifest.statusPath));
+    if (bytes.isNil() || Number(bytes.length) > 16777216) throw new Error('Cannot read status.');
+    var raw = JSON.parse(ObjC.unwrap($.NSString.alloc.initWithDataEncoding(bytes, $.NSUTF8StringEncoding)));
+    var validInteger = function (value) { return Number.isInteger(value) && value >= 0; };
+    if (!raw || raw.version !== 1 || !validInteger(raw.attempt) || raw.attempt < 1 ||
+        !['running', 'complete', 'cancelled', 'error'].includes(raw.phase) ||
+        !validInteger(raw.total) || !validInteger(raw.processed) ||
+        raw.processed > raw.total || !Array.isArray(raw.items) || raw.items.length !== raw.total ||
+        !raw.items.every(function (item) {
+            return item && Number.isInteger(item.index) && item.index > 0 &&
+                typeof item.name === 'string' && item.name.length <= 4096 &&
+                ['pending', 'running', 'completed', 'skipped', 'failed', 'cancelled'].includes(item.status) &&
+                (item.message === undefined || item.message === null || typeof item.message === 'string');
+        })) throw new Error('Invalid status.');
+    return raw;
+}
+
+/** End a timer-driven monitor after its terminal state has been published. */
+function closeProgressWindow() {
+    progress.finished = true;
+    progress.timer.invalidate;
+    // Terminate the app directly: stopModal alone may wait indefinitely for
+    // a real user event when invoked from a timer during a modal session.
+    $.NSApp.terminate(null);
+}
+
+/** Refresh native controls from one complete snapshot of the current attempt. */
+function refreshProgress() {
+    // Only the owner writes shutdown after its converter has stopped or never started.
+    if ($.NSFileManager.defaultManager.fileExistsAtPath($(progress.manifest.shutdownPath))) {
+        progress.heading.stringValue = $(progress.t.cancelled);
+        closeProgressWindow();
+        return;
+    }
+    var status;
+    try {
+        status = readProgressStatus();
+        if (!progress.readyWritten) {
+            writeProgressMarker(progress.manifest.readyPath);
+            progress.readyWritten = true;
+        }
+    } catch (error) {
+        // A broken status cannot safely authorize another document; request cancellation.
+        requestProgressCancel();
+        progress.heading.stringValue = $(progress.t.unavailable);
+        progress.cancelButton.hidden = true;
+        progress.retryButton.hidden = true;
+        progress.doneButton.hidden = false;
+        progress.doneButton.enabled = true;
+        // Keep polling so owner shutdown can close a monitor with unreadable status.
+        progress.phase = 'error';
+        return;
+    }
+    if (status.attempt !== progress.attempt) {
+        progress.attempt = status.attempt;
+        progress.retryPending = false;
+        progress.cancelling = false;
+    }
+    var running = status.phase === 'running';
+    // A cancellation clicked after the worker's last snapshot still wins.
+    var cancellationRequested = progress.cancelling || Boolean(
+        $.NSFileManager.defaultManager.fileExistsAtPath($(progress.manifest.cancelPath)));
+    progress.phase = !running && cancellationRequested ? 'cancelled' : status.phase;
+    var t = progress.t;
+    var heading = running ? (status.attempt > 1 ? t.retrying + ' — ' + status.total + ' ' + (status.total === 1 ? t.file : t.files) : t.running) :
+        (status.phase === 'complete' ? t.complete : status.phase === 'cancelled' ? t.cancelled : t.error);
+    progress.heading.stringValue = $(cancellationRequested ? (running ? t.cancelling : t.cancelled) : heading);
+    progress.bar.maxValue = Math.max(1, status.total);
+    progress.bar.doubleValue = status.processed;
+    var current = typeof status.currentName === 'string' ? status.currentName : '';
+    var countText = status.processed + ' ' + t.of + ' ' + status.total;
+    if (running && current) countText += '  ·  ' + current;
+    if (!running) {
+        ['completed', 'skipped', 'failed', 'cancelled'].forEach(function (kind) {
+            var count = status.items.filter(function (item) { return item.status === kind; }).length;
+            if (count) countText += '  ·  ' + count + ' ' + (kind === 'cancelled' ? t.stopped : t[kind]);
+        });
+    }
+    progress.count.stringValue = $(countText);
+    var names = {pending: t.pending, running: t.active, completed: t.completed,
+        skipped: t.skipped, failed: t.failed, cancelled: t.stopped};
+    var lines = status.items.map(function (item) {
+        return names[item.status] + '  ·  ' + item.name +
+            (item.message ? '\n    ' + item.message : '');
+    });
+    progress.details.string = $(lines.join('\n'));
+    var failed = status.items.some(function (item) { return item.status === 'failed'; });
+    var canRetry = status.phase === 'complete' && failed && !cancellationRequested;
+    progress.cancelButton.hidden = !running;
+    progress.cancelButton.enabled = running && !progress.cancelling;
+    progress.doneButton.hidden = running;
+    progress.doneButton.enabled = !progress.retryPending;
+    progress.retryButton.hidden = !canRetry;
+    progress.retryButton.enabled = canRetry && !progress.retryPending;
+    if (progress.manifest.autoCloseOnSuccess && status.phase === 'complete' && !failed) {
+        try {
+            progressCommand(cancellationRequested ? 'cancel' : 'close');
+            closeProgressWindow();
+        } catch (error) { reviewAlert(String(error)); }
+    }
+}
+
+ObjC.registerSubclass({
+    name: 'FinderPDFProgressController',
+    superclass: 'NSObject',
+    protocols: ['NSWindowDelegate'],
+    methods: {
+        'tick:': {types: ['void', ['id']], implementation: function () { refreshProgress(); }},
+        'cancelProgress:': {types: ['void', ['id']], implementation: function () { requestProgressCancel(); }},
+        'retryProgress:': {types: ['void', ['id']], implementation: function () {
+            if (progress.retryPending || progress.phase === 'running') return;
+            try {
+                progressCommand('retry');
+                progress.retryPending = true;
+                progress.retryButton.enabled = false;
+                progress.doneButton.enabled = false;
+            } catch (error) { reviewAlert(String(error)); }
+        }},
+        'doneProgress:': {types: ['void', ['id']], implementation: function () {
+            if (progress.retryPending) return;
+            if (progress.phase === 'running') { requestProgressCancel(); return; }
+            try { progressCommand('close'); } catch (error) { reviewAlert(String(error)); return; }
+            progress.finished = true;
+            progress.timer.invalidate;
+            $.NSApp.stopModal;
+        }},
+        'windowShouldClose:': function () {
+            if (progress.finished) return true;
+            if (progress.retryPending) return false;
+            if (progress.phase === 'running') { requestProgressCancel(); return false; }
+            try { progressCommand('close'); } catch (error) { reviewAlert(String(error)); return false; }
+            progress.finished = true;
+            progress.timer.invalidate;
+            $.NSApp.stopModal;
+            return true;
+        }
+    }
+});
+
+/** Open the native progress window and poll until the user closes the result. */
+function runProgress() {
+    progress.handler = $.FinderPDFProgressController.alloc.init;
+    var window = $.NSWindow.alloc.initWithContentRectStyleMaskBackingDefer(
+        $.NSMakeRect(0, 0, 600, 440), 7, 2, false);
+    progress.window = window;
+    window.title = $(progress.t.title);
+    window.delegate = progress.handler;
+    window.center;
+    var content = window.contentView;
+    progress.heading = label(progress.t.running, 24, 386, 550, 24, 16);
+    content.addSubview(progress.heading);
+    progress.bar = $.NSProgressIndicator.alloc.initWithFrame($.NSMakeRect(24, 353, 552, 18));
+    progress.bar.indeterminate = false;
+    progress.bar.minValue = 0;
+    content.addSubview(progress.bar);
+    progress.count = label('', 24, 325, 552, 22);
+    content.addSubview(progress.count);
+    var scroll = $.NSScrollView.alloc.initWithFrame($.NSMakeRect(24, 76, 552, 235));
+    scroll.hasVerticalScroller = true;
+    scroll.borderType = 1;
+    progress.details = $.NSTextView.alloc.initWithFrame($.NSMakeRect(0, 0, 550, 235));
+    progress.details.editable = false;
+    progress.details.selectable = true;
+    progress.details.font = $.NSFont.systemFontOfSize(13);
+    scroll.documentView = progress.details;
+    content.addSubview(scroll);
+    // button() is shared with review and receives the active controller through review.
+    review.handler = progress.handler;
+    progress.cancelButton = button(progress.t.cancel, 466, 22, 110, 'cancelProgress:');
+    progress.doneButton = button(progress.t.done, 466, 22, 110, 'doneProgress:');
+    progress.retryButton = button(progress.t.retry, 310, 22, 148, 'retryProgress:');
+    progress.doneButton.hidden = true;
+    progress.retryButton.hidden = true;
+    content.addSubview(progress.cancelButton);
+    content.addSubview(progress.doneButton);
+    content.addSubview(progress.retryButton);
+    window.makeKeyAndOrderFront(null);
+    window.orderFrontRegardless;
+    window.makeMainWindow;
+    $.NSApp.activateIgnoringOtherApps(true);
+    progress.timer = $.NSTimer.scheduledTimerWithTimeIntervalTargetSelectorUserInfoRepeats(
+        0.35, progress.handler, 'tick:', null, true);
+    $.NSRunLoop.mainRunLoop.addTimerForMode(progress.timer, $.NSModalPanelRunLoopMode);
     $.NSApp.runModalForWindow(window);
 }
