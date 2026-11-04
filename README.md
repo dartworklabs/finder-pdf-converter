@@ -1,162 +1,182 @@
-# Finder PDF 변환 빠른 동작
+[한국어](README.ko.md)
 
-Finder에서 파일 하나 또는 여러 개를 선택해 각각 PDF로 변환합니다.
+# Finder PDF Converter
 
-| 형식 | 변환에 필요한 앱 |
+Convert one or more files to separate PDFs from Finder's Quick Actions menu.
+
+| File type | Required app |
 | --- | --- |
-| HWP, HWPX | 한컴오피스 한글(한국어 UI) |
-| DOCX | Microsoft Word |
-| PPTX | Microsoft PowerPoint |
-| XLSX | Microsoft Excel |
-| CSV | 별도 앱 설치 없이 macOS에서 처리 |
-| PNG, JPG, JPEG, HEIC, HEIF | 별도 앱 설치 없이 macOS에서 처리 |
-| Android DNG RAW(아래 지원 범위 참고) | 별도 앱 설치 없이 macOS에서 처리 |
-| TXT, MD, MARKDOWN | 별도 앱 설치 없이 macOS에서 처리 |
+| HWP, HWPX | Hancom Office HWP for Mac (Korean interface) |
+| DOCX | Microsoft Word for Mac |
+| PPTX | Microsoft PowerPoint for Mac |
+| XLSX | Microsoft Excel for Mac |
+| CSV | None beyond macOS |
+| PNG, JPG, JPEG, HEIC, HEIF | None beyond macOS |
+| Android DNG RAW (see the scope below) | None beyond macOS |
+| TXT, MD, MARKDOWN | None beyond macOS |
 
-macOS 26.6.2에서 동작을 확인했습니다. 이는 확인한 버전이며, 최소 지원 버전을 뜻하지는 않습니다.
+Tested on macOS 26.6.2. This is the tested version, not a stated minimum requirement.
 
-한글·Word·PowerPoint·Excel은 웹 버전이 아닌 Mac용 앱이 필요합니다. 변환할 형식에 해당하는 앱만 준비하면 됩니다. Office 앱은 한 번 실행해 초기 설정을 마쳐 주세요. 파일 확장자는 대소문자를 구분하지 않습니다.
+Hancom HWP, Word, PowerPoint, and Excel must be installed as Mac apps; their web versions do not work with this tool. You only need the app for the file type you want to convert. Open each Office app once and finish its initial setup before using it here. File extensions are case-insensitive.
 
-## 설치
+The Quick Action, result dialogs, and installer messages currently use Korean. This guide includes the Korean labels you will see, with English explanations.
 
-### 1. 파일 받기
+<a id="설치"></a>
 
-Git을 설치하지 않아도 됩니다. [GitHub 저장소](https://github.com/dartworklabs/finder-pdf-converter)에서 초록색 **Code → Download ZIP**을 선택하고, 받은 ZIP 파일을 더블 클릭해 압축을 풉니다. 압축을 푼 폴더를 계속 보관할 위치로 옮깁니다. 폴더 안에 `install.sh`와 `README.md`가 있는지 확인하세요.
+## Install
 
-Git을 이미 사용한다면 ZIP 대신 다음 명령으로 받을 수 있습니다.
+### 1. Download the files
+
+You do not need Git. On the [GitHub repository page](https://github.com/dartworklabs/finder-pdf-converter), choose the green **Code → Download ZIP** button. Double-click the downloaded ZIP to extract it, then move the extracted folder somewhere you plan to keep it. Check that it contains `install.sh` and `README.md`.
+
+If you already use Git, you can clone the repository instead:
 
 ```sh
 git clone https://github.com/dartworklabs/finder-pdf-converter.git
 ```
 
-### 2. 설치 실행
+### 2. Run the installer
 
-1. Mac의 **터미널** 앱을 엽니다. Spotlight에서 `터미널`을 검색하면 됩니다.
-2. 터미널에 `cd`를 입력하고 **스페이스를 한 번** 누릅니다. Finder에서 `install.sh`가 들어 있는 실제 폴더를 터미널 창으로 끌어다 놓은 뒤 Return 키를 누릅니다. 폴더 경로를 직접 입력할 필요가 없습니다.
-3. 다음 명령을 붙여 넣고 Return 키를 누릅니다.
-
-```sh
-bash ./install.sh
-```
-
-`설치했습니다:`와 함께 경로가 표시되면 설치된 것입니다. 관리자 권한이나 `sudo`는 필요하지 않습니다.
-
-설치 스크립트는 빠른 동작과 실행 파일을 `~/Library/Services/PDF로 변환.workflow`에 복사합니다. 같은 이름의 다른 항목은 덮어쓰지 않으며, **같은 절대 경로의 원본 폴더에서 설치한 항목만 갱신**합니다. 설치본의 폴더나 실행 파일이 심볼릭 링크로 바뀌어 있으면 갱신을 중단합니다.
-
-### 3. Finder에서 켜기
-
-Finder에서 파일을 보조 클릭하고 **빠른 동작 → 사용자화**를 엽니다. Finder 확장 목록에서 **PDF로 변환**을 켭니다. 메뉴가 바로 보이지 않으면 Finder 창을 새로 열어 다시 확인하세요.
-
-### 4. PNG 한 장으로 확인
-
-별도 앱이 필요 없는 PNG로 먼저 확인합니다. 화면 캡처 등 PNG 파일 한 장을 쓰기 가능한 폴더에 준비하고, 같은 이름의 PDF가 없는지 확인하세요.
-
-1. Finder에서 PNG를 보조 클릭하고 **빠른 동작 → PDF로 변환**을 선택합니다.
-2. 결과 창에 **완료 1개 · 건너뜀 0개 · 실패 0개**가 표시되는지 확인합니다.
-3. PNG와 같은 폴더에 같은 이름의 PDF가 생겼는지 확인하고, PDF를 열어 이미지가 보이는지 확인합니다.
-
-같은 이름의 PDF가 이미 있으면 변환하지 않고 건너뜁니다. 이때는 다른 PNG로 확인하거나 기존 PDF의 이름을 바꾼 뒤 다시 실행하세요.
-
-PNG 확인을 마친 뒤 사용할 문서 형식을 시험하세요. Office가 폴더 접근을 요청하면 [Word·PowerPoint·Excel의 폴더 접근 허용](#wordpowerpointexcel의-폴더-접근-허용)을, 한글 변환 권한은 [한글 변환 권한과 조작](#한글-변환-권한과-조작)을 참고하세요. macOS가 앱 제어 권한을 요청할 때도 아래 권한 안내에 따라 허용합니다.
-
-## 업데이트
-
-업데이트할 때는 **처음 설치한 원본 폴더의 절대 경로를 유지**해야 합니다. 위치나 이름이 달라지면 설치 스크립트는 다른 폴더에서 설치한 항목으로 판단해 갱신을 중단합니다.
-
-- **ZIP으로 받은 경우:** 새 ZIP을 별도 위치에 풀고, 그 안의 파일을 처음 설치한 폴더에 복사해 갱신합니다. 폴더 이름만 같아도 상위 위치가 다르면 다른 경로입니다. 다운로드하면서 생긴 `(1)`이나 `-main` 등이 붙은 새 폴더에서 바로 설치하지 마세요. 처음 설치한 폴더에 보관한 개인 파일이 있다면 덮어쓸 파일을 먼저 확인합니다.
-- **Git으로 받은 경우:** 처음 받은 폴더에서 `git pull --ff-only`를 실행합니다. 실패하면 변경 내용을 확인한 뒤 해결하고, 강제로 덮어쓰지 마세요.
-
-파일을 갱신한 뒤 터미널에서 [설치 실행](#2-설치-실행)과 같은 방법으로 **처음 설치한 폴더**에 들어가 다음을 실행합니다.
+1. Open **Terminal** on your Mac. You can find it by searching for `Terminal` in Spotlight.
+2. Type `cd` followed by **one space**. Drag the actual folder containing `install.sh` from Finder into the Terminal window, then press Return. This fills in the folder path for you.
+3. Paste the following command and press Return:
 
 ```sh
 bash ./install.sh
 ```
 
-`설치를 갱신했습니다.`가 표시되면 PNG 확인을 다시 합니다. `기존 항목이 있어 설치하지 않았습니다:`가 나오면 기존 설치와 원본 폴더 경로가 같은지 확인하세요. 다른 경로로 옮겨 설치하려면 아래 제거 절차로 본인이 설치한 항목을 먼저 제거한 뒤 새 위치에서 설치합니다.
+When you see `설치했습니다:` (“Installed:”) followed by a path, installation is complete. No administrator access or `sudo` is required.
 
-## 설치 점검
+The installer copies the Quick Action and its executables to `~/Library/Services/PDF로 변환.workflow`. It will not overwrite an unrelated item with that name. It **only updates an installation made from the same source folder at the same absolute path**. It also refuses to update an installation whose folder or executables have been replaced with symbolic links.
 
-터미널에서 `install.sh`가 있는 폴더에 들어가 다음을 실행합니다.
+### 3. Enable it in Finder
+
+Control-click or right-click a file in Finder and open **Quick Actions → Customize** (`빠른 동작 → 사용자화` on a Korean Mac). In the Finder extensions list, enable **PDF로 변환** (“Convert to PDF”). If it does not appear immediately, open a new Finder window and check again.
+
+### 4. Try a single PNG
+
+Start with a PNG, which needs no additional app. Put a PNG, such as a screenshot, in a folder you can write to. Make sure there is no PDF with the same base name in that folder.
+
+1. Control-click or right-click the PNG in Finder and choose **Quick Actions → PDF로 변환** (“Convert to PDF”).
+2. Check that the result dialog says **완료 1개 · 건너뜀 0개 · 실패 0개** (“Completed: 1 · Skipped: 0 · Failed: 0”).
+3. Check that a PDF with the same base name appears beside the PNG. Open it and confirm that the image is visible.
+
+If a PDF with that name already exists, the converter skips the file. Try another PNG or rename the existing PDF before trying again.
+
+Once the PNG works, try the document types you need. If Office asks for folder access, see [Office folder access](#office-folder-access). For Hancom HWP permissions, see [Hancom HWP permissions and operation](#hancom-hwp-permissions-and-operation). Follow those instructions as well if macOS asks for permission to control an app.
+
+## Update
+
+**Keep the original source folder at the same absolute path.** If you rename or move it, the installer treats it as a different source and refuses to update the existing installation.
+
+- **If you downloaded a ZIP:** Extract the new ZIP somewhere else, then copy its contents into the folder you originally installed from. A folder with the same name in a different parent folder is still a different path. Do not run the installer directly from a newly downloaded folder with a suffix such as `(1)` or `-main`. If you keep personal files in the original folder, review what will be replaced before copying.
+- **If you used Git:** Run `git pull --ff-only` in the original folder. If it fails, review and resolve the changes instead of forcing an overwrite.
+
+After updating the files, use the steps in [Run the installer](#2-run-the-installer) to open **the original folder** in Terminal, then run:
+
+```sh
+bash ./install.sh
+```
+
+When you see `설치를 갱신했습니다.` (“Installation updated.”), repeat the PNG check. If you see `기존 항목이 있어 설치하지 않았습니다:` (“Not installed because an item already exists:”), check that you are using the same source-folder path as the existing installation. To install from a new location, first remove your existing installation using the instructions below, then install from the new folder.
+
+## Check the installation
+
+In Terminal, open the folder containing `install.sh` and run:
 
 ```sh
 bash ./doctor.sh
 ```
 
-현재 원본 폴더의 실행 파일과 빠른 동작 파일을 설치본과 바이트 단위로 비교합니다. 파일을 바꾸거나 앱을 실행하지 않으며, 홈 디렉토리의 실제 경로와 이메일 주소는 출력하지 않습니다. 종료 코드는 모두 일치하면 `0`, 설치 누락·내용 차이·읽기 실패는 `1`, macOS가 아니거나 실행 조건이 잘못되면 `2`입니다. 설치 확인이 필요하면 [설치](#설치)와 [업데이트](#업데이트) 안내를 확인하세요.
+This compares the current source folder's executables and Quick Action files with the installed copies, byte for byte. It does not change files or launch apps, and it does not print your actual home-directory path or email addresses. Exit codes are `0` if all files match, `1` for a missing installation, differing contents, or a read failure, and `2` for a non-macOS system or invalid execution conditions. See [Install](#install) and [Update](#update) if the installation needs attention.
 
-한글·Word·PowerPoint·Excel은 `/Applications`와 `~/Applications`의 표준 앱 이름으로 각각 확인합니다. 앱 미발견은 종료 코드에 영향을 주지 않으며, 다른 위치에 설치했다면 직접 확인해야 합니다. 앱 실행·라이선스·macOS 권한·실제 변환 성공 여부는 확인하지 않으므로 [PNG 한 장으로 확인](#4-png-한-장으로-확인)도 진행하세요.
+The check looks for Hancom HWP, Word, PowerPoint, and Excel under their standard app names in `/Applications` and `~/Applications`. Missing apps do not affect the exit code; check manually if you installed them elsewhere. This check does not verify app startup, licensing, macOS permissions, or actual conversion. Complete the [PNG check](#4-try-a-single-png) as well.
 
-## 제거
+## Uninstall
 
-1. Finder의 **이동 → 폴더로 이동…**에서 `~/Library/Services`를 입력합니다.
-2. **이 도구로 본인이 설치한 `PDF로 변환.workflow`인지 확인한 뒤**, 해당 항목만 휴지통으로 옮깁니다. 출처가 확실하지 않은 같은 이름의 항목이나 다른 빠른 동작은 지우지 마세요.
+1. In Finder, choose **Go → Go to Folder…** and enter `~/Library/Services`.
+2. **Confirm that `PDF로 변환.workflow` is the item you installed with this tool**, then move only that item to the Trash. Do not remove an item of uncertain origin with the same name, or any other Quick Action.
 
-이 작업은 빠른 동작만 제거합니다. 원본 문서와 변환한 PDF는 그대로 남습니다. 관리자 권한이나 `sudo`는 필요하지 않습니다.
+This removes the Quick Action only. Your source files and converted PDFs remain in place. No administrator access or `sudo` is required.
 
-## 사용
+## Use
 
-Finder에서 파일을 선택하고 보조 클릭한 다음 **빠른 동작 → PDF로 변환**을 선택합니다. 변환된 PDF는 원본과 같은 폴더에 같은 이름으로 저장됩니다. 예를 들어 `보고서.docx`는 `보고서.pdf`가 됩니다. 여러 파일을 선택해도 하나로 합치지 않고 파일마다 PDF를 만듭니다. 완료 후 성공·건너뜀·실패 개수와 파일별 결과를 보여 줍니다.
+Select files in Finder, Control-click or right-click, and choose **Quick Actions → PDF로 변환** (“Convert to PDF”). Each PDF is saved beside its source with the same base name: for example, `report.docx` becomes `report.pdf`. Selecting multiple files creates a separate PDF for each file; it does not merge them. The result dialog shows completed, skipped, and failed counts, along with a result for each file.
 
-같은 이름의 PDF가 이미 있으면 덮어쓰지 않고 건너뜁니다. 같은 폴더의 `자료.docx`와 `자료.png`처럼 이름이 같은 여러 파일을 선택하면 먼저 변환된 파일만 `자료.pdf`로 저장되고 나머지는 건너뜁니다. 지원하지 않는 형식은 건너뛰며, 읽을 수 없는 파일·심볼릭 링크·손상된 파일은 실패로 표시합니다. 한 파일이 실패해도 나머지 파일은 계속 처리합니다.
+Existing PDFs are never overwritten. If you select files with the same base name in the same folder, such as `report.docx` and `report.png`, the first successful conversion creates `report.pdf` and the others are skipped. Unsupported file types are skipped. Unreadable files, symbolic links, and corrupt files are reported as failures. A failure does not stop the remaining files from being processed.
 
-변환은 원본의 임시 사본으로 진행합니다. 한글·Word·PowerPoint·Excel에서 이미 열린 사용자 문서는 그대로 두고, 변환용 사본만 닫습니다. 다만 앱에서 저장하지 않은 수정 내용은 반영되지 않으므로, 변환할 최신 내용을 원본 파일에 저장한 뒤 실행하세요. 다른 PDF 변환이 실행 중이면 완료 후 다시 시도하라는 안내가 나옵니다.
+Conversion uses temporary copies of the source files. Documents you already have open in Hancom HWP, Word, PowerPoint, or Excel are left open; only the conversion copies are closed. Unsaved changes in those apps are not included, so save the latest version to the source file before converting. If another conversion is already running, a message asks you to wait for it to finish and try again.
 
-텍스트·마크다운·CSV는 UTF-8, BOM이 있는 UTF-16, CP949/EUC-KR 파일을 지원합니다. BOM이 없는 파일은 UTF-8을 먼저 시도하고, UTF-8로 읽을 수 없을 때 CP949/EUC-KR로 읽습니다. 두 인코딩 모두로 읽히는 파일은 UTF-8로 처리하므로, 한글이 다르게 표시되면 원본을 UTF-8로 저장한 뒤 다시 변환하세요. 파일은 최대 16 MiB, 결과는 최대 2,000쪽까지 처리합니다. 마크다운은 추가로 200만 자(UTF-16 코드 단위 기준), 5만 줄, 2만 블록까지 처리하며, 표 하나는 최대 32열·본문 5,000행을 지원합니다.
+### Text and Markdown
 
-마크다운은 제목, 목록, 인용, 코드, 표와 기본 글자 강조 등을 표시합니다. 표가 6열을 넘으면 각 행을 `열 이름: 값` 형태로 풀어 표시합니다. 원시 HTML은 실행하지 않고 문자로 표시하며, 링크의 대상이나 이미지를 불러오지 않습니다. 지원하지 않는 마크다운 문법은 원문으로 남을 수 있습니다.
+Text, Markdown, and CSV files support UTF-8, UTF-16 with a byte-order mark (BOM), and CP949/EUC-KR. Files without a BOM are read as UTF-8 first, with CP949/EUC-KR used only if UTF-8 decoding fails. A file valid in both is treated as UTF-8. If Korean text looks wrong, save the source as UTF-8 and convert again.
 
-XLSX는 Excel의 PDF 내보내기를 사용하며, 통합 문서에 저장된 인쇄 영역과 페이지 설정을 따릅니다. 숨긴 시트는 제외하며 외부 링크는 자동으로 갱신하지 않습니다.
+The input limit is 16 MiB per file, and the output limit is 2,000 pages. Markdown also has limits of 2 million UTF-16 code units, 50,000 lines, and 20,000 blocks. Each Markdown table may contain up to 32 columns and 5,000 body rows.
 
-CSV는 쉼표로 구분된 값을 표로 표시합니다. 따옴표 안의 쉼표와 줄바꿈, 두 번 쓴 큰따옴표를 처리하며, 첫 행을 제목으로 추정하지 않고 모든 셀을 문자 그대로 표시합니다. 5열 이하는 열 번호를 붙인 표로, 6열 이상은 행마다 `열 번호: 값` 형태로 표시합니다. 수식·HTML·외부 링크는 실행하거나 불러오지 않습니다. 빈 파일은 내용이 없다는 안내를 표시합니다. 최대 20,000행·행당 1,024열·전체 100,000셀·셀당 262,144자까지 처리하며, 행·열 안내를 포함한 예상 표시 분량이 4,194,304자(UTF-16 코드 단위 기준)를 넘으면 변환을 중단합니다. 잘못 닫힌 따옴표나 처리 한도를 넘은 파일은 실패로 표시합니다.
+Markdown renders headings, lists, blockquotes, code, tables, and basic text emphasis. Tables wider than six columns are presented as a series of rows, with each cell shown as `column name: value`. Raw HTML is displayed as text, not executed. Link destinations and images are not fetched. Unsupported Markdown syntax may remain as plain source text.
 
-이미지는 방향 정보를 반영해 한 페이지 PDF로 저장합니다. PNG/JPEG는 단일 이미지를 지원합니다. HEIC/HEIF는 파일의 대표 정지 이미지 한 장을 사용하며, 보조 이미지나 깊이 정보 등을 별도 페이지로 추가하지 않습니다. 애니메이션이나 연속 사진 전체를 PDF로 변환하는 기능은 제공하지 않습니다.
+### Spreadsheets and CSV
 
-## DNG RAW 확인
+XLSX conversion uses Excel's PDF export and follows the print areas and page settings saved in the workbook. Hidden sheets are excluded, and external links are not automatically updated.
 
-확인한 입력은 Google Pixel 4 XL의 CFA RAW DNG와 Samsung Galaxy Z Fold7의 JPEG XL 압축 DNG 1.7 Linear RAW입니다. 같은 `.dng` 확장자라도 기기·촬영 모드·압축 방식에 따라 다르므로, 모든 Android DNG나 모든 DNG 1.7 파일의 지원을 보장하지 않습니다.
+CSV files are rendered as comma-separated tables. The converter handles quoted commas, quoted line breaks, and escaped double quotes (`""`). It displays every cell literally and does not assume the first row is a header. Files with up to five columns use a table with numbered columns; files with six or more use one entry per row, with cells shown as `column number: value`. Formulas and HTML are not executed, and external links are not fetched. An empty file produces a notice that there is no content.
 
-DNG는 macOS의 RAW 디코더로 현상한 이미지를 한 페이지 PDF로 저장합니다. Classic TIFF 구조의 DNG 1.x 중 전체 해상도 CFA 또는 Linear RAW 영상이 하나인 파일을 처리하며, BigTIFF나 RAW 영상이 여러 개여서 선택이 모호한 파일은 거부합니다. 입력은 최대 512 MiB, 센서 및 현상 결과는 최대 2억 1천만 픽셀까지 처리합니다. 작은 내장 미리보기만으로 성공 처리하지 않습니다. 방향 정보를 반영하며, 원본 DNG의 센서 데이터·촬영 메타데이터를 PDF에 보존하는 기능은 제공하지 않습니다. PDF의 밝기와 색은 카메라 앱이나 다른 RAW 현상 앱의 결과와 다를 수 있습니다.
+CSV limits are 20,000 rows, 1,024 columns per row, 100,000 cells in total, and 262,144 characters per cell. Conversion stops if the estimated displayed content, including row and column labels, exceeds 4,194,304 UTF-16 code units. Malformed quoting or a file exceeding these limits is reported as a failure.
 
-개인 RAW 사진은 이 저장소에 넣을 필요가 없습니다. 직접 가진 DNG로 확인하려면 먼저 쓰기 가능한 별도 폴더에 사본을 준비하고, 같은 이름의 PDF가 없는지 확인한 뒤 다음과 같이 실행합니다.
+### Images
 
-```sh
-./convert.sh --no-dialog -- "/절대/경로/사진.dng"
-```
+Images become single-page PDFs with their orientation metadata applied. PNG and JPEG support a single image. HEIC/HEIF uses the file's primary still image; auxiliary images and depth information are not added as separate pages. Converting an entire animation or burst sequence is not supported.
 
-원본 옆에 만들어진 PDF를 열어 방향·크기·색을 확인하세요. 실패하면 해당 기기와 DNG 형식이 현재 macOS에서 현상 가능한지 확인해야 합니다. 같은 이름의 PDF가 이미 있으면 건너뛰므로, 다시 확인할 때는 기존 PDF의 이름을 바꾸세요.
+## DNG RAW support and verification
 
-추가 품질 검증은 선택 사항이며 일반 변환에는 필요하지 않습니다. Python 환경에 `rawpy`, `Pillow`, `numpy`, `PyMuPDF`와 `exiftool` 명령이 준비되어 있다면, 저장소 폴더에서 다음을 실행합니다.
+The tested inputs are a Google Pixel 4 XL CFA RAW DNG and a Samsung Galaxy Z Fold7 DNG 1.7 Linear RAW file with JPEG XL compression. A `.dng` extension alone does not establish compatibility: devices, shooting modes, and compression methods differ. Support for all Android DNG files or all DNG 1.7 files is not guaranteed.
 
-```sh
-python3 verification/verify-dng-quality.py "/절대/경로/사진.dng" "/절대/경로/사진.pdf"
-```
+The converter develops DNG images with the macOS RAW decoder and saves the result as a single-page PDF. It accepts DNG 1.x files using the Classic TIFF structure with one unambiguous full-resolution CFA or Linear RAW image. BigTIFF and files with multiple RAW images whose selection is ambiguous are rejected. Limits are 512 MiB per input and 210 million pixels for both the sensor image and developed result. A small embedded preview alone is not accepted as a successful conversion.
 
-같은 촬영의 카메라 JPEG가 있다면 `--reference "/절대/경로/카메라사진.jpg"`를 붙여 비교 기준으로 사용할 수 있습니다. `--self-test`는 품질 검증기의 방향·색상 판별 자체를 확인합니다.
+Orientation metadata is applied. The PDF does not preserve the original DNG's sensor data or capture metadata. Brightness and color may differ from the camera app or another RAW developer. See [DNG verification evidence](verification/DNG.md) for the tested files, observed quality, independent comparisons, and limitations.
 
-이 검증은 원본과 PDF를 읽어 크기·방향 및 색상 진단 결과를 출력합니다. LibRaw가 현상할 수 있는 파일은 RAW 현상 결과와 비교합니다. LibRaw가 지원하지 않는 파일에서 큰 내장 JPEG를 참조했다면 결과에 그 한계를 표시하며, 작은 썸네일만으로 전체 해상도 RAW 검증을 통과시키지 않습니다. 현상 방식마다 화이트밸런스와 톤이 달라질 수 있으므로 두 이미지의 픽셀이 완전히 같은지는 합격 기준으로 삼지 않습니다.
-
-## Word·PowerPoint·Excel의 폴더 접근 허용
-
-Finder에서 Office 앱의 임시 폴더에 접근할 수 없으면 `~/Library/Caches/FinderPDFConverter/OfficeExports/` 아래의 `Word`·`PowerPoint`·`Excel` 폴더를 사용합니다. 이때 Office가 **파일 액세스 부여** 창을 처음 띄울 수 있습니다. **선택...**을 누르고, 화면에 요청된 앱 이름의 폴더를 그대로 선택한 뒤 **액세스 허가**를 누르세요. 버튼이 비활성화되어 있으면 선택 창을 클릭해 앞으로 가져온 뒤 다시 확인하세요.
-
-Word·PowerPoint·Excel은 각각 권한을 요청합니다. 이후 변환도 같은 폴더를 사용하므로 매번 새 임시 폴더를 허용할 필요가 없습니다. 권한을 취소했거나 Office가 다시 요청하면 같은 절차로 허용한 뒤 다시 실행하세요. 원본 이름 대신 임의의 이름을 쓴 사본과 중간 PDF만 이 폴더에 잠시 두며, 변환이 끝나면 이번 작업이 만든 파일만 지웁니다.
-
-## 한글 변환 권한과 조작
-
-한글 변환은 화면 조작을 사용합니다. **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용 → Finder**를 허용하세요. macOS가 한글, Word, PowerPoint 또는 Excel 제어 권한을 요청하면 해당 권한도 허용합니다. 터미널에서 직접 실행할 때는 터미널 앱에 권한이 필요할 수 있습니다.
-
-한글에서 저장 창이나 경고창을 먼저 닫고 실행하세요. 변환하는 동안 한글의 다른 문서나 메뉴를 조작하지 말고, 한글이 전면에 있도록 유지하세요. 앱이 바뀌거나 예상하지 못한 창이 뜨면 변환이 중단될 수 있습니다. 실패 안내를 확인한 뒤 남아 있는 경고창을 직접 닫고 다시 실행하세요. 이미 만들어진 PDF를 다시 변환하려면 기존 PDF를 다른 이름으로 옮기거나 직접 삭제해야 합니다.
-
-## 터미널 실행
-
-결과 창 없이 실행하려면 다음과 같이 사용합니다. 공백이 있는 경로는 따옴표로 감쌉니다.
+You do not need to add private RAW photos to this repository. To test your own DNG, first copy it into a separate writable folder and make sure there is no PDF with the same base name. From the repository folder, run:
 
 ```sh
-./convert.sh --no-dialog -- "/절대/경로/보고서.docx" "/절대/경로/사진.heic"
+./convert.sh --no-dialog -- "/absolute/path/photo.dng"
 ```
 
-종료 코드는 성공·건너뜀만 있으면 `0`, 파일별 실패가 있으면 `1`, 입력 누락·실행 준비 실패·다른 변환 실행 중이면 `2`입니다.
+Open the PDF created beside the DNG and check its orientation, dimensions, and color. If conversion fails, check whether the device and DNG format can be developed by your current macOS version. Existing PDFs are skipped, so rename the previous PDF before repeating the test.
 
-## 라이선스
+### Optional quality checks
 
-이 프로젝트의 소스 코드와 문서는 [MIT 라이선스](LICENSE)를 따릅니다. 한글과 Microsoft Office는 별도로 설치해야 하며, 각 공급사의 라이선스가 적용됩니다.
+These checks are optional and are not required for normal conversion. If your Python environment has `rawpy`, `Pillow`, `numpy`, and `PyMuPDF`, and the `exiftool` command is available, run this from the repository folder:
+
+```sh
+python3 verification/verify-dng-quality.py "/absolute/path/photo.dng" "/absolute/path/photo.pdf"
+```
+
+If you have a camera JPEG from the same shot, add `--reference "/absolute/path/camera-photo.jpg"` to use it as a comparison. The `--self-test` option checks the verifier's own orientation and color discrimination.
+
+The verifier reads the DNG and PDF and reports dimensions, orientation, and color diagnostics. For files LibRaw can develop, it compares the PDF with an independent RAW rendering. If LibRaw cannot decode the RAW and a large embedded JPEG is used instead, the report states that limitation. A small thumbnail cannot qualify as a full-resolution RAW check. White balance and tone vary between RAW developers, so pixel-for-pixel equality is not the pass criterion.
+
+## Office folder access
+
+When Finder cannot access an Office app's temporary folder, the converter uses the corresponding `Word`, `PowerPoint`, or `Excel` folder under `~/Library/Caches/FinderPDFConverter/OfficeExports/`. Office may then show a **Grant File Access** dialog (`파일 액세스 부여`). Click **Select…** (`선택...`), select the folder for the app named in the request, and click **Grant Access** (`액세스 허가`). If a button is disabled, bring the selection dialog to the front by clicking it, then check again.
+
+Word, PowerPoint, and Excel each request access separately. Later conversions reuse the same folder, so you do not need to approve a new temporary folder every time. If you cancel access or Office asks again, grant access using the same steps and retry. Only randomly named source copies and intermediate PDFs are temporarily stored there. When conversion ends, the converter removes only the files it created for that run.
+
+## Hancom HWP permissions and operation
+
+Hancom HWP conversion uses on-screen controls and requires its **Korean interface**. In **System Settings → Privacy & Security → Accessibility**, allow **Finder**. If macOS asks for permission to control Hancom HWP, Word, PowerPoint, or Excel, allow the relevant request as well. When running directly from Terminal, the terminal app may need these permissions.
+
+Close any save dialogs or warning dialogs in Hancom HWP before starting. During conversion, keep Hancom HWP in front and avoid using its other documents or menus. Switching apps or an unexpected dialog can interrupt conversion. After reading a failure message, manually dismiss any remaining warning dialog and try again. To regenerate a PDF that already exists, rename or remove the existing PDF yourself first.
+
+## Run from Terminal
+
+To run without the result dialog, use `--no-dialog`. Put paths containing spaces in quotes:
+
+```sh
+./convert.sh --no-dialog -- "/absolute/path/report.docx" "/absolute/path/photo.heic"
+```
+
+Exit codes are `0` when all files succeed or are skipped, `1` when any file fails, and `2` for missing input, startup failures, or another conversion already in progress.
+
+## License
+
+The source code and documentation are licensed under the [MIT License](LICENSE). Hancom HWP and Microsoft Office must be installed separately and are subject to their vendors' licenses.
