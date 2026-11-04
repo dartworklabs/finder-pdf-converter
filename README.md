@@ -2,7 +2,7 @@
 
 # Finder PDF Converter
 
-Convert one or more files to separate PDFs from Finder's Quick Actions menu, or print PDFs and supported source files with **Print to Fit**.
+Convert one or more files to separate PDFs from Finder's Quick Actions menu, preview and print supported files with **Print to Fit**, or combine selected pages with **Merge PDFs**.
 
 | File type | Required app |
 | --- | --- |
@@ -19,7 +19,7 @@ Tested on macOS 26.6.2. This is the tested version, not a stated minimum require
 
 Hancom HWP, Word, PowerPoint, and Excel must be installed as Mac apps; their web versions do not work with this tool. You only need the app for the file type you want to convert. Open each Office app once and finish its initial setup before using it here. File extensions are case-insensitive.
 
-The Quick Action menus are **Convert to PDF** and **Print to Fit** in English Finder, and **PDF로 변환** and **용지에 맞춰 인쇄** in Korean Finder. Conversion results follow Finder’s preferred-language list, or the macOS list if Finder has no app-specific setting: they use the first supported language (English or Korean), and English if neither appears. For other Finder languages, the native menus can fall back to the registered Korean defaults **PDF로 변환** and **용지에 맞춰 인쇄** even when results are in English; English menu titles are not guaranteed. Region settings and Terminal’s `LANG` do not select the result language. Installer and installation-check (`doctor.sh`) messages remain in Korean.
+The Quick Action menus are **Convert to PDF**, **Print to Fit**, and **Merge PDFs** in English Finder, and **PDF로 변환**, **용지에 맞춰 인쇄**, and **PDF 합치기** in Korean Finder. Conversion results follow Finder’s preferred-language list, or the macOS list if Finder has no app-specific setting: they use the first supported language (English or Korean), and English if neither appears. For other Finder languages, the native menus can fall back to the registered Korean defaults **PDF로 변환**, **용지에 맞춰 인쇄**, and **PDF 합치기** even when results are in English; English menu titles are not guaranteed. Region settings and Terminal’s `LANG` do not select the result language. Installer and installation-check (`doctor.sh`) messages remain in Korean.
 
 <a id="설치"></a>
 
@@ -47,11 +47,11 @@ bash ./install.sh
 
 When you see `설치했습니다:` (“Installed:”) followed by a path, installation is complete. No administrator access or `sudo` is required.
 
-The installer copies two Quick Actions to `~/Library/Services/PDF로 변환.workflow` and `~/Library/Services/용지에 맞춰 인쇄.workflow`. The shared executables are kept in the conversion bundle, so keep that bundle installed when using Print to Fit. It will not overwrite an unrelated item with either name. It **only updates an installation made from the same source folder at the same absolute path**. It also refuses to update an installation whose folder or executables have been replaced with symbolic links.
+The installer copies three Quick Actions to `~/Library/Services/PDF로 변환.workflow`, `~/Library/Services/용지에 맞춰 인쇄.workflow`, and `~/Library/Services/PDF 합치기.workflow`. It compiles the review application with macOS’s built-in tools before updating any installed files. The shared executables are kept in the conversion bundle, so keep that bundle installed when using Print to Fit or Merge PDFs. It will not overwrite an unrelated item with any of these names. It **only updates an installation made from the same source folder at the same absolute path**. It also refuses to update an installation whose folder or executables have been replaced with symbolic links.
 
 ### 3. Enable it in Finder
 
-Control-click or right-click a file in Finder and open **Quick Actions → Customize** (`빠른 동작 → 사용자화` on a Korean Mac). In the Finder extensions list, enable **Convert to PDF** (**PDF로 변환** in Korean) and **Print to Fit** (**용지에 맞춰 인쇄** in Korean). You can disable either menu item here later. If it does not appear immediately, open a new Finder window and check again.
+Control-click or right-click a file in Finder and open **Quick Actions → Customize** (`빠른 동작 → 사용자화` on a Korean Mac). In the Finder extensions list, enable **Convert to PDF** (**PDF로 변환** in Korean), **Print to Fit** (**용지에 맞춰 인쇄** in Korean), and **Merge PDFs** (**PDF 합치기** in Korean). You can disable any menu item here later. If it does not appear immediately, open a new Finder window and check again.
 
 ### 4. Try a single PNG
 
@@ -65,7 +65,7 @@ If a PDF with that name already exists, the converter skips the file. Try anothe
 
 Once the PNG works, try the document types you need. If Office asks for folder access, see [Office folder access](#office-folder-access). For Hancom HWP permissions, see [Hancom HWP permissions and operation](#hancom-hwp-permissions-and-operation). Follow those instructions as well if macOS asks for permission to control an app.
 
-The installed bundles keep the names `PDF로 변환.workflow` and `용지에 맞춰 인쇄.workflow` in both languages. Only the displayed menu labels change. The language of the PDF content and the required Korean interface of Hancom HWP are unaffected.
+The installed bundles keep the names `PDF로 변환.workflow`, `용지에 맞춰 인쇄.workflow`, and `PDF 합치기.workflow` in both languages. Only the displayed menu labels change. The language of the PDF content and the required Korean interface of Hancom HWP are unaffected.
 
 ## Update
 
@@ -80,7 +80,7 @@ After updating the files, use the steps in [Run the installer](#2-run-the-instal
 bash ./install.sh
 ```
 
-The same installer updates both actions and adds Print to Fit to an older conversion-only installation. When you see `설치를 갱신했습니다.` (“Installation updated.”), repeat the PNG check, enable Print to Fit in Finder if needed, and check its printer and paper settings as described below. If you see `기존 항목이 있어 설치하지 않았습니다:` (“Not installed because an item already exists:”), check that you are using the same source-folder path as the existing installation. To install from a new location, first remove your existing installation using the instructions below, then install from the new folder.
+The same installer updates all three actions and adds Print to Fit and Merge PDFs to an older conversion-only installation. When you see `설치를 갱신했습니다.` (“Installation updated.”), repeat the PNG check, enable Print to Fit and Merge PDFs in Finder if needed, and check its printer and paper settings as described below. If you see `기존 항목이 있어 설치하지 않았습니다:` (“Not installed because an item already exists:”), check that you are using the same source-folder path as the existing installation. To install from a new location, first remove your existing installation using the instructions below, then install from the new folder.
 
 ## Check the installation
 
@@ -90,30 +90,36 @@ In Terminal, open the folder containing `install.sh` and run:
 bash ./doctor.sh
 ```
 
-This compares both Quick Actions and the current source folder's shared executables with the installed copies, byte for byte. It does not change files or launch apps, and it does not print your actual home-directory path or email addresses. Exit codes are `0` if all files match, `1` for a missing installation, differing contents, or a read failure, and `2` for a non-macOS system or invalid execution conditions. See [Install](#install) and [Update](#update) if the installation needs attention.
+This compares all three Quick Actions and the current source folder's shared executables with the installed copies, byte for byte. It also checks the generated review app’s ownership, file inventory, and source hashes. It does not change files or launch apps, and it does not print your actual home-directory path or email addresses. Exit codes are `0` if all files match, `1` for a missing installation, differing contents, or a read failure, and `2` for a non-macOS system or invalid execution conditions. See [Install](#install) and [Update](#update) if the installation needs attention.
 
 The check looks for Hancom HWP, Word, PowerPoint, and Excel under their standard app names in `/Applications` and `~/Applications`. Missing apps do not affect the exit code; check manually if you installed them elsewhere. This check does not verify app startup, licensing, macOS permissions, or actual conversion. Complete the [PNG check](#4-try-a-single-png) as well.
 
 ## Uninstall
 
 1. In Finder, choose **Go → Go to Folder…** and enter `~/Library/Services`.
-2. **Confirm that `PDF로 변환.workflow` and `용지에 맞춰 인쇄.workflow` are the items you installed with this tool**, then move those items to the Trash. Do not remove an item of uncertain origin with either name, or any other Quick Action.
+2. **Confirm that `PDF로 변환.workflow`, `용지에 맞춰 인쇄.workflow`, and `PDF 합치기.workflow` are the items you installed with this tool**, then move those three items to the Trash. Do not remove an item of uncertain origin with these names, or any other Quick Action.
 
-To remove only Print to Fit, remove only `용지에 맞춰 인쇄.workflow`. Keep `PDF로 변환.workflow` because it holds the shared executables. To hide a menu without removing it, turn it off in Finder’s Quick Actions customization.
+To remove only Print to Fit or Merge PDFs, remove its corresponding workflow bundle. Keep `PDF로 변환.workflow` because it holds the shared executables. To hide a menu without removing it, turn it off in Finder’s Quick Actions customization.
 
 This removes the Quick Actions only. Your source files and converted PDFs remain in place. No administrator access or `sudo` is required.
 
 ## Print to Fit
 
-Select PDFs, or any source format in the table above, then choose **Quick Actions → Print to Fit** (**빠른 동작 → 용지에 맞춰 인쇄** in Korean). The action prepares the entire selection, then opens one macOS print panel for the combined pages. Choose the printer, paper, orientation, and copies, then press **Print**. The action prints every page in the selection and does not offer a page-range control. **Cancel** closes the panel without submitting a job.
+Select PDFs, or any source format in the table above, then choose **Quick Actions → Print to Fit** (**빠른 동작 → 용지에 맞춰 인쇄** in Korean). The action prepares the entire selection, then opens **Review Documents**. Choose a document to preview its pages, use **Move Up** or **Move Down** to reorder documents, clear **Include this document** to omit one, and enter pages such as `1, 3-5` (blank includes all pages). The preview reflects the chosen pages. Click **Print Settings…**, choose the printer, paper, orientation, and copies in the macOS print panel, then press **Print**. Cancelling either window submits no job. Each review accepts up to 1,000 input files.
 
 Each page is reduced only when needed to fit the selected printer’s printable area, centered, and rotated automatically when that gives a better fit. Small pages are not enlarged. The printable area comes from the printer driver, so it can differ by printer and paper. Original page margins remain part of the page; this action does not crop them away. The action sets job scaling to 100% and one page per sheet. Printer-specific driver settings can still affect the final output.
 
-Pages follow the order passed by Finder, with each document’s pages kept together. Identical file names are prepared separately. PDFs are read from private copies; other formats are converted using the same apps and limits described below. Save unsaved edits before starting. Unsupported, unreadable, symbolic-link, folder, or invalid inputs stop the entire batch before a print panel opens. A conversion failure also stops the batch; it never silently prints only the successful files.
+The initial document order comes from Finder. Printing follows the order and page selections accepted in the review window. Identical file names are prepared separately. PDFs are read from private copies; other formats are converted using the same apps and limits described below. Save unsaved edits before starting. Unsupported, unreadable, symbolic-link, folder, or invalid inputs stop the entire batch before a print panel opens. A conversion failure also stops the batch; it never silently prints only the successful files.
 
-Print to Fit creates no PDF beside a source and never uses an existing adjacent PDF as a substitute for converting that source. Temporary copies and intermediate PDFs are removed after the panel closes or preparation fails. Its preparation errors follow the same Finder/macOS language selection as conversion results. The native print panel follows macOS’s own language settings.
+Print to Fit creates no PDF beside a source and never uses an existing adjacent PDF as a substitute for converting that source. Temporary copies and intermediate PDFs are removed after the panel closes or preparation fails. Its preparation errors follow the same Finder/macOS language selection as conversion results. The review window and native save panel use the selected Finder/macOS language. The native print panel follows macOS’s own language settings.
 
 For a first check, select a PDF you can recognize, open Print to Fit, check the printer and paper settings, then cancel. For a small physical test, select a single-page document, open Print to Fit, choose the intended printer and paper, and print it. A proof PDF check alone does not verify paper feed or the physical printer’s output.
+
+## Merge PDFs
+
+Select PDFs or supported source files in Finder and choose **Quick Actions → Merge PDFs** (**빠른 동작 → PDF 합치기** in Korean). The same review window lets you preview pages, reorder or omit documents, and select page ranges. Click **Save PDF…** and choose a new PDF filename. Existing files and symbolic links are never replaced, including a name created by another writer while the PDF is being prepared. Cancelling saves nothing.
+
+The merged PDF keeps the selected pages’ original sizes and rotations; it does not resize pages to printer paper. Supported source formats are converted in private copies first. An invalid or failed input stops the entire batch, including inputs later omitted in review. Original files and any PDFs beside them remain untouched. Merge does not require a printer.
 
 ## Use
 
@@ -196,16 +202,26 @@ Exit codes are `0` when all files succeed or are skipped, `1` when any file fail
 ### Print from Terminal or make a proof
 
 ```sh
-bash ./print-fit.sh -- "/absolute/path/report.pdf" "/absolute/path/photo.heic"
+bash "$HOME/Library/Services/PDF로 변환.workflow/Contents/Resources/print-fit.sh" -- "/absolute/path/report.pdf" "/absolute/path/photo.heic"
 ```
 
-This opens the same single print panel as Finder. `--no-dialog` suppresses error alerts, but keeps the print panel. To exercise conversion and the same page renderer without submitting a physical job, give a new proof PDF path:
+Use the installed entry above for interactive review: it has the compiled helper beside it. This opens the same review window and print panel as Finder. `--no-dialog` suppresses error alerts, but keeps both windows. To exercise conversion and the same page renderer without submitting a physical job, give a new proof PDF path:
 
 ```sh
 bash ./print-fit.sh --proof "/absolute/path/new-proof.pdf" -- "/absolute/path/report.pdf" "/absolute/path/report.docx"
 ```
 
 Proof mode uses the current default printer and paper settings, opens no print panel, and never overwrites an existing file or symbolic link, including a name created by another writer while rendering. A default printer must be available. Exit codes for this entry are `0` for a completed native operation, saved proof, or user cancellation; `1` for a batch preparation/rendering failure; and `2` for usage or setup errors. A completed native print operation means submission succeeded, not that the printer has finished producing paper.
+
+### Merge from Terminal or choose pages for verification
+
+```sh
+bash ./print-fit.sh --merge --output "/absolute/path/new-merged.pdf" -- "/absolute/path/report.pdf" "/absolute/path/notes.docx"
+```
+
+`--merge --output` merges all pages without opening windows and needs no printer. Omit `--output` and use the installed entry to open the merge review window instead. `--proof` stays noninteractive and uses printer sizing; it cannot be combined with `--merge` or `--output`.
+
+For automated checks, add `--selection "/absolute/path/selection.json"` to a proof or an explicit merge output. The UTF-8 JSON format is `{"version":1,"cancelled":false,"files":[{"index":1,"pages":[2,1]},{"index":0,"pages":[1]}]}`. Indices refer to the zero-based input order; pages are one-based and emitted in the listed order. Every included document and page must appear at most once. Invalid selections reject the whole batch. These noninteractive modes work directly from the checkout without a compiled review app.
 
 ## License
 

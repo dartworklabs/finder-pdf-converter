@@ -8,7 +8,7 @@ import tempfile
 REPO = Path(__file__).resolve().parents[1]
 HELPERS = ('locale.sh', 'preferred-language.js', 'convert.sh', 'hancom.applescript', 'word.applescript',
            'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js',
-           'text.js', 'markdown.js', 'csv.js', 'print-fit.sh', 'print-fit.js')
+           'text.js', 'markdown.js', 'csv.js', 'print-fit.sh', 'print-fit.js', 'review-model.js', 'document-review.js')
 
 
 def snapshot(folder):
@@ -37,18 +37,25 @@ with tempfile.TemporaryDirectory(prefix='fpdf-doctor-') as temp:
         return output
 
     run(1, 'missing workflow reported without creating installation')
+    installed = subprocess.run(['/bin/bash', str(REPO / 'install.sh')], env={**os.environ, 'HOME': str(home)}, capture_output=True, text=True)
+    assert installed.returncode == 0, installed.stderr
     target = home / 'Library/Services/PDF로 변환.workflow'
-    shutil.copytree(REPO / 'PDF로 변환.workflow', target)
     print_target = home / 'Library/Services/용지에 맞춰 인쇄.workflow'
-    shutil.copytree(REPO / '용지에 맞춰 인쇄.workflow', print_target)
     resources = target / 'Contents/Resources'
-    resources.mkdir(exist_ok=True)
-    for name in HELPERS:
-        shutil.copy2(REPO / name, resources / name)
     output = run(0, 'matching installed workflow succeeds')
     for app in ('Hancom Office HWP', 'Microsoft Word', 'Microsoft PowerPoint', 'Microsoft Excel'):
         assert app in output, 'app not reported individually: ' + app
     run(0, 'repeated matching diagnosis remains read-only')
+    review_info = resources / 'Finder PDF Review.app/Contents/Info.plist'
+    original_review_info = review_info.read_bytes()
+    review_info.write_bytes(original_review_info + b'\n')
+    run(1, 'modified compiled review app rejected without writes')
+    review_info.write_bytes(original_review_info)
+    merge_workflow = home / 'Library/Services/PDF 합치기.workflow/Contents/document.wflow'
+    original_merge_workflow = merge_workflow.read_bytes()
+    merge_workflow.write_text('stale merge workflow')
+    run(1, 'stale merge workflow rejected')
+    merge_workflow.write_bytes(original_merge_workflow)
     print_workflow = print_target / 'Contents/document.wflow'
     original_print_workflow = print_workflow.read_bytes()
     print_workflow.write_text('stale print workflow')

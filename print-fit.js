@@ -6,32 +6,83 @@ ObjC.import('Foundation');
 
 /** Parse the private batch interface, rejecting ambiguous or incomplete arguments. */
 function argumentsForBatch(argv) {
-    let proof = null;
+    const args = { proof: null, merge: null, selection: null };
     let i = 0;
-    if (argv[i] === '--proof') {
-        proof = argv[++i];
-        if (!proof || proof[0] !== '/') throw new Error('Proof destination must be an absolute path.');
-        i++;
+    while (i < argv.length && argv[i] !== '--') {
+        const option = argv[i++];
+        const key = { '--proof': 'proof', '--merge': 'merge', '--selection': 'selection' }[option];
+        if (!key || args[key] !== null || i >= argv.length || argv[i][0] !== '/') {
+            throw new Error('Invalid batch option or absolute path.');
+        }
+        args[key] = argv[i++];
     }
-    if (argv[i++] !== '--' || i === argv.length) throw new Error('Usage: print-fit.js [--proof /destination.pdf] -- /input.pdf ...');
-    const paths = argv.slice(i);
-    if (paths.some(path => path[0] !== '/')) throw new Error('Input paths must be absolute.');
-    return { proof, paths };
+    if (argv[i++] !== '--' || i === argv.length || (args.proof && args.merge)) {
+        throw new Error('Usage: print-fit.js [--selection /selection.json] [--proof /proof.pdf | --merge /output.pdf] -- /input.pdf ...');
+    }
+    args.paths = argv.slice(i);
+    if (args.paths.some(path => path[0] !== '/')) throw new Error('Input paths must be absolute.');
+    return args;
 }
 
-/** Read every PDF before opening a panel; a bad input rejects the entire batch. */
-function combineDocuments(paths) {
+/** Read and validate all source pages before any printing or output is attempted. */
+function readDocuments(paths, copying) {
+    return paths.map(path => {
+        const doc = $.PDFDocument.alloc.initWithURL($.NSURL.fileURLWithPath($(path)));
+        if (doc.isNil() || doc.isLocked || (copying ? !doc.allowsCopying : !doc.allowsPrinting) || Number(doc.pageCount) === 0) {
+            throw new Error('Cannot read a permitted, unlocked, nonempty PDF: ' + path);
+        }
+        for (let i = 0; i < Number(doc.pageCount); i++) {
+            if (doc.pageAtIndex(i).isNil()) throw new Error('Cannot read a PDF page: ' + path);
+        }
+        return doc;
+    });
+}
+
+/** Convert reviewed selection to an ordered sequence after validating the entire selection. */
+function selectedPages(path, docs) {
+    if (!path) return docs.map((doc, index) => ({ index, pages: Array.from({length: Number(doc.pageCount)}, (_, i) => i + 1) }));
+    const data = $.NSData.dataWithContentsOfFile($(path));
+    if (data.isNil() || Number(data.length) > 10 * 1024 * 1024) throw new Error('Cannot read selection.');
+    const string = $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding);
+    if (string.isNil()) throw new Error('Invalid selection encoding.');
+    let selection;
+    try { selection = JSON.parse(ObjC.unwrap(string)); } catch (_) { throw new Error('Invalid selection JSON.'); }
+    if (!selection || selection.version !== 1 || selection.cancelled !== false || !Array.isArray(selection.files)) throw new Error('Invalid selection.');
+    const seenFiles = new Set();
+    let total = 0;
+    const files = selection.files.map(file => {
+        if (!file || !Number.isSafeInteger(file.index) || file.index < 0 || file.index >= docs.length || seenFiles.has(file.index) || !Array.isArray(file.pages)) throw new Error('Invalid selected file.');
+        seenFiles.add(file.index);
+        const seenPages = new Set();
+        for (const page of file.pages) {
+            if (!Number.isSafeInteger(page) || page < 1 || page > Number(docs[file.index].pageCount) || seenPages.has(page)) throw new Error('Invalid selected page.');
+            seenPages.add(page);
+            total++;
+        }
+        if (file.name !== undefined && (typeof file.name !== 'string' || !file.name || file.name.length > 4096)) throw new Error('Invalid selected filename.');
+        return {index: file.index, pages: file.pages, name: file.name};
+    });
+    if (!total) throw new Error('No pages selected.');
+    return files;
+}
+
+/** Assemble the selected original PDF pages without rendering or changing their geometry. */
+function combineDocuments(docs, selection, paths, bookmarks) {
     const combined = $.PDFDocument.alloc.init;
-    for (const path of paths) {
-        const url = $.NSURL.fileURLWithPath($(path));
-        const doc = $.PDFDocument.alloc.initWithURL(url);
-        if (doc.isNil() || doc.isLocked || !doc.allowsPrinting || Number(doc.pageCount) === 0) throw new Error('Cannot read an unlocked, nonempty PDF: ' + path);
-        for (let i = 0; i < doc.pageCount; i++) {
-            const page = doc.pageAtIndex(i);
-            if (page.isNil()) throw new Error('Cannot read a PDF page: ' + path);
-            combined.insertPageAtIndex(page, combined.pageCount);
+    const outline = bookmarks ? $.PDFOutline.alloc.init : null;
+    for (const file of selection) {
+        const first = Number(combined.pageCount);
+        for (const page of file.pages) {
+            combined.insertPageAtIndex(docs[file.index].pageAtIndex(page - 1), combined.pageCount);
+        }
+        if (outline && file.pages.length) {
+            const bookmark = $.PDFOutline.alloc.init;
+            bookmark.label = $(file.name || ObjC.unwrap($(paths[file.index]).lastPathComponent));
+            bookmark.destination = $.PDFDestination.alloc.initWithPageAtPoint(combined.pageAtIndex(first), $.NSMakePoint(0, 0));
+            outline.insertChildAtIndex(bookmark, outline.numberOfChildren);
         }
     }
+    if (outline) combined.outlineRoot = outline;
     return combined;
 }
 
@@ -110,7 +161,16 @@ function disableAdditionalScaling(info) {
 /** Run one native print panel for the batch, or save the identical drawing path as a proof. */
 function run(argv) {
     const args = argumentsForBatch(argv);
-    const doc = combineDocuments(args.paths);
+    const docs = readDocuments(args.paths, !!args.merge);
+    const selection = selectedPages(args.selection, docs);
+    const doc = combineDocuments(docs, selection, args.paths, !!args.merge);
+    if (args.merge) {
+        const data = doc.dataRepresentation;
+        if (data.isNil() || !data.writeToURLOptionsError($.NSURL.fileURLWithPath($(args.merge)), 2, null)) {
+            throw new Error('Could not write new merge output.');
+        }
+        return;
+    }
     $.NSApplication.sharedApplication;
     const info = $.NSPrintInfo.sharedPrintInfo.copy;
     if (info.printer.isNil()) throw new Error('No default printer is available.');

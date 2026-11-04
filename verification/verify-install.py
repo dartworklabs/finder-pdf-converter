@@ -18,10 +18,12 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
     base = Path(temp).resolve()
     source = base / "source ' $ checkout"
     source.mkdir()
-    for name in ['install.sh', 'locale.sh', 'preferred-language.js', 'convert.sh', 'hancom.applescript', 'word.applescript', 'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js', 'print-fit.sh', 'print-fit.js']:
+    for name in ['install.sh', 'locale.sh', 'preferred-language.js', 'convert.sh', 'hancom.applescript', 'word.applescript', 'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js', 'print-fit.sh', 'print-fit.js', 'review-model.js', 'document-review.js']:
         shutil.copy2(REPO / name, source / name)
     shutil.copytree(REPO / 'PDF로 변환.workflow', source / 'PDF로 변환.workflow')
     shutil.copytree(REPO / '용지에 맞춰 인쇄.workflow', source / '용지에 맞춰 인쇄.workflow')
+
+    shutil.copytree(REPO / 'PDF 합치기.workflow', source / 'PDF 합치기.workflow')
 
     def run(home):
         """Run the real installer with HOME isolated from the user's services."""
@@ -47,6 +49,34 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
     print_target = home / 'Library/Services/용지에 맞춰 인쇄.workflow'
     print_files = ('Info.plist', 'document.wflow', 'Resources/en.lproj/InfoPlist.strings', 'Resources/ko.lproj/InfoPlist.strings')
     check(all((print_target / 'Contents' / name).read_bytes() == (source / '용지에 맞춰 인쇄.workflow/Contents' / name).read_bytes() for name in print_files) and all((resources / name).read_bytes() == (source / name).read_bytes() for name in ('print-fit.sh', 'print-fit.js')), 'both actions and print helpers installed')
+    merge_target = home / 'Library/Services/PDF 합치기.workflow'
+    check(all((merge_target / 'Contents' / name).read_bytes() == (source / 'PDF 합치기.workflow/Contents' / name).read_bytes() for name in print_files), 'merge action installed with stable localized metadata')
+    review = resources / 'Finder PDF Review.app'
+    check((review / 'Contents/MacOS/applet').is_file() and (resources / 'review-app.sha256').is_file(), 'built-in compiler produces installed native review app and hash inventory')
+    check(subprocess.run(['/usr/bin/codesign', '--verify', '--strict', str(review)], capture_output=True).returncode == 0, 'generated app signature remains valid after metadata creation')
+    review_info = review / 'Contents/Info.plist'
+    original_info = review_info.read_bytes()
+    review_info.write_bytes(original_info + b'\n')
+    check(run(home).returncode != 0 and review_info.read_bytes() == original_info + b'\n', 'modified generated helper blocks update without deleting changes')
+    review_info.write_bytes(original_info)
+    extra = review / 'Contents/Resources/unrelated.txt'
+    extra.write_text('preserve unrelated file')
+    check(run(home).returncode != 0 and extra.read_text() == 'preserve unrelated file', 'extra helper file blocks replacement')
+    extra.unlink()
+    extra.symlink_to(base / 'absent')
+    check(run(home).returncode != 0 and extra.is_symlink(), 'linked helper member blocks replacement')
+    extra.unlink()
+    check(run(home).returncode == 0, 'unchanged owned helper can be upgraded')
+    before = (resources / 'convert.sh').read_bytes()
+    original_js = (source / 'document-review.js').read_bytes()
+    (source / 'document-review.js').write_text('function run( { syntax error')
+    check(run(home).returncode != 0 and (resources / 'convert.sh').read_bytes() == before, 'review compilation failure leaves installed resources unchanged')
+    (source / 'document-review.js').write_bytes(original_js)
+    conflict_home = base / 'merge-conflict-home'
+    foreign = conflict_home / 'Library/Services/PDF 합치기.workflow'
+    foreign.mkdir(parents=True)
+    (foreign / 'sentinel').write_text('untouched')
+    check(run(conflict_home).returncode != 0 and (foreign / 'sentinel').read_text() == 'untouched' and not (conflict_home / 'Library/Services/PDF로 변환.workflow').exists(), 'foreign merge action blocks entire installation')
     # A foreign print action must block all updates, including converter files.
     conflict_home = base / 'print-conflict-home'
     foreign = conflict_home / 'Library/Services/용지에 맞춰 인쇄.workflow'
@@ -142,7 +172,7 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
 
     # Every added resource participates in preflight and destination checks;
     # a missing helper must not partially replace an existing installation.
-    for helper in ('csv.js', 'excel.applescript', 'dng.js', 'locale.sh', 'preferred-language.js', 'print-fit.sh', 'print-fit.js'):
+    for helper in ('csv.js', 'excel.applescript', 'dng.js', 'locale.sh', 'preferred-language.js', 'print-fit.sh', 'print-fit.js', 'review-model.js', 'document-review.js'):
         installed_before = (resources / 'convert.sh').read_bytes()
         (source / helper).rename(source / (helper + '.hidden'))
         result = run(home)

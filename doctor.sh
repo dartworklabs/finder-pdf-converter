@@ -17,7 +17,7 @@ if [ -z "${HOME:-}" ]; then
 fi
 root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 target="$HOME/Library/Services/PDF로 변환.workflow"
-resources=(locale.sh preferred-language.js convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js print-fit.sh print-fit.js)
+resources=(locale.sh preferred-language.js convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js print-fit.sh print-fit.js review-model.js document-review.js)
 status=0
 printf '%s\n' '확인: macOS'
 
@@ -79,6 +79,40 @@ else
       status=1
     else
       check_file "$root/용지에 맞춰 인쇄.workflow/Contents/Resources/$directory/InfoPlist.strings" "$print_target/Contents/Resources/$directory/InfoPlist.strings" "인쇄/$directory/InfoPlist.strings"
+    fi
+  done
+fi
+
+# The generated app is checked against its install-time inventory and the exact
+# current sources, without recompiling, launching, or writing diagnostic files.
+review="$target/Contents/Resources/Finder PDF Review.app"
+inventory="$target/Contents/Resources/review-app.sha256"
+if [ -L "$review" ] || [ ! -d "$review" ] || [ -L "$inventory" ] || [ ! -f "$inventory" ] ||
+   [ -n "$(/usr/bin/find "$review" ! -type f ! -type d -print 2>/dev/null)" ] ||
+   ! cmp -s "$review/Contents/Resources/finder-pdf-owner" <(printf '%s' "$root") ||
+   ! cmp -s "$inventory" <(cd "$review" && /usr/bin/find -s . -type f -exec /usr/bin/shasum -a 256 {} \; 2>/dev/null) ||
+   ! cmp -s "$review/Contents/Resources/finder-pdf-sources.sha256" <(cd "$root" && /usr/bin/shasum -a 256 review-model.js document-review.js 2>/dev/null); then
+  printf '%s\n' '설치 확인 필요: 검토 앱 없음·소유권·내용·원본 차이'
+  status=1
+else
+  printf '%s\n' '일치: 검토 앱과 원본 해시'
+fi
+
+# Check the separately registered merge action and its localized metadata.
+merge_target="$HOME/Library/Services/PDF 합치기.workflow"
+if [ ! -d "$merge_target" ] || [ -L "$merge_target" ] || [ ! -d "$merge_target/Contents" ] || [ -L "$merge_target/Contents" ] || [ ! -d "$merge_target/Contents/Resources" ] || [ -L "$merge_target/Contents/Resources" ]; then
+  printf '%s\n' '설치 확인 필요: 합치기 빠른 동작이 없거나 폴더가 링크입니다.'
+  status=1
+else
+  for file in Info.plist document.wflow; do
+    check_file "$root/PDF 합치기.workflow/Contents/$file" "$merge_target/Contents/$file" "합치기/$file"
+  done
+  for directory in en.lproj ko.lproj; do
+    if [ ! -d "$merge_target/Contents/Resources/$directory" ] || [ -L "$merge_target/Contents/Resources/$directory" ]; then
+      printf '설치 확인 필요: 합치기 번역 폴더 없음 또는 링크 — %s\n' "$directory"
+      status=1
+    else
+      check_file "$root/PDF 합치기.workflow/Contents/Resources/$directory/InfoPlist.strings" "$merge_target/Contents/Resources/$directory/InfoPlist.strings" "합치기/$directory/InfoPlist.strings"
     fi
   done
 fi

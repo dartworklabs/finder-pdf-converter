@@ -7,7 +7,11 @@ source="$root/PDF로 변환.workflow"
 target="$HOME/Library/Services/PDF로 변환.workflow"
 print_source="$root/용지에 맞춰 인쇄.workflow"
 print_target="$HOME/Library/Services/용지에 맞춰 인쇄.workflow"
-resources=(locale.sh preferred-language.js convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js print-fit.sh print-fit.js)
+merge_source="$root/PDF 합치기.workflow"
+merge_target="$HOME/Library/Services/PDF 합치기.workflow"
+review_name="Finder PDF Review.app"
+review_inventory="review-app.sha256"
+resources=(locale.sh preferred-language.js convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js print-fit.sh print-fit.js review-model.js document-review.js)
 localizations=(en.lproj ko.lproj)
 bundle_resources=(en.lproj/InfoPlist.strings ko.lproj/InfoPlist.strings)
 obsolete_resources=(en.lproj/ServicesMenu.strings ko.lproj/ServicesMenu.strings)
@@ -34,6 +38,17 @@ for directory in Contents Contents/Resources Contents/Resources/en.lproj Content
   if [ ! -d "$print_source/$directory" ] || [ -L "$print_source/$directory" ]; then
     printf '%s\n' "인쇄 빠른 동작 폴더가 없거나 링크입니다: $directory" >&2
     exit 1
+  fi
+done
+# The merge action must also be complete before any installation is changed.
+for directory in Contents Contents/Resources Contents/Resources/en.lproj Contents/Resources/ko.lproj; do
+  if [ ! -d "$merge_source/$directory" ] || [ -L "$merge_source/$directory" ]; then
+    printf '%s\n' "합치기 빠른 동작 폴더가 없거나 링크입니다: $directory" >&2; exit 1
+  fi
+done
+for file in Info.plist document.wflow Resources/en.lproj/InfoPlist.strings Resources/ko.lproj/InfoPlist.strings; do
+  if [ ! -f "$merge_source/Contents/$file" ] || [ -L "$merge_source/Contents/$file" ]; then
+    printf '%s\n' "합치기 빠른 동작 파일이 없거나 링크입니다: $file" >&2; exit 1
   fi
 done
 for file in "${resources[@]}"; do
@@ -70,6 +85,27 @@ for file in Info.plist document.wflow Resources/en.lproj/InfoPlist.strings Resou
   cp "$print_source/Contents/$file" "$stage/print/Contents/$file"
 done
 ln -s "$root" "$stage/print/Contents/project"
+mkdir -p "$stage/merge/Contents/Resources/en.lproj" "$stage/merge/Contents/Resources/ko.lproj"
+for file in Info.plist document.wflow Resources/en.lproj/InfoPlist.strings Resources/ko.lproj/InfoPlist.strings; do
+  cp "$merge_source/Contents/$file" "$stage/merge/Contents/$file"
+done
+ln -s "$root" "$stage/merge/Contents/project"
+# Build the Cocoa review application using only macOS's built-in compiler.
+# Compilation failure is detected while every installed bundle is untouched.
+cat "$root/review-model.js" "$root/document-review.js" > "$stage/review.js"
+/usr/bin/osacompile -l JavaScript -o "$stage/Contents/Resources/$review_name" "$stage/review.js"
+/usr/libexec/PlistBuddy -c 'Add :CFBundleIdentifier string com.wonjun-lab.finder-pdf-converter.review' "$stage/Contents/Resources/$review_name/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleDevelopmentRegion en' "$stage/Contents/Resources/$review_name/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Add :CFBundleLocalizations array' "$stage/Contents/Resources/$review_name/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Add :CFBundleLocalizations:0 string en' "$stage/Contents/Resources/$review_name/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Add :CFBundleLocalizations:1 string ko' "$stage/Contents/Resources/$review_name/Contents/Info.plist"
+printf '%s' "$root" > "$stage/Contents/Resources/$review_name/Contents/Resources/finder-pdf-owner"
+(cd "$root" && /usr/bin/shasum -a 256 review-model.js document-review.js) > "$stage/Contents/Resources/$review_name/Contents/Resources/finder-pdf-sources.sha256"
+/usr/bin/codesign --force --sign - "$stage/Contents/Resources/$review_name"
+# Inventory every generated file by relative path; generated app bytes are not
+# tracked in git. Extra, changed, linked, or special entries block replacement.
+(cd "$stage/Contents/Resources/$review_name" && /usr/bin/find -s . -type f -exec /usr/bin/shasum -a 256 {} \;) > "$stage/Contents/Resources/$review_inventory"
+
 # Reject foreign or redirected print bundles before modifying the converter.
 if [ -e "$print_target" ] || [ -L "$print_target" ]; then
   if [ -L "$print_target" ] || [ ! -d "$print_target" ] || [ -L "$print_target/Contents" ] || [ ! -d "$print_target/Contents" ] || [ ! -L "$print_target/Contents/project" ] || [ "$(readlink "$print_target/Contents/project")" != "$root" ]; then
@@ -85,6 +121,25 @@ if [ -e "$print_target" ] || [ -L "$print_target" ]; then
   for file in Info.plist document.wflow Resources/en.lproj/InfoPlist.strings Resources/ko.lproj/InfoPlist.strings; do
     if [ -L "$print_target/Contents/$file" ] || { [ -e "$print_target/Contents/$file" ] && [ ! -f "$print_target/Contents/$file" ]; }; then
       printf '%s\n' "인쇄 빠른 동작 파일 위치가 변경되었습니다: $file" >&2
+      exit 1
+    fi
+  done
+fi
+# Reject foreign or redirected merge bundles before modifying the converter.
+if [ -e "$merge_target" ] || [ -L "$merge_target" ]; then
+  if [ -L "$merge_target" ] || [ ! -d "$merge_target" ] || [ -L "$merge_target/Contents" ] || [ ! -d "$merge_target/Contents" ] || [ ! -L "$merge_target/Contents/project" ] || [ "$(readlink "$merge_target/Contents/project")" != "$root" ]; then
+    printf '%s\n' "기존 합치기 빠른 동작이 있어 설치하지 않았습니다: $merge_target" >&2
+    exit 1
+  fi
+  for directory in Resources Resources/en.lproj Resources/ko.lproj; do
+    if [ -L "$merge_target/Contents/$directory" ] || { [ -e "$merge_target/Contents/$directory" ] && [ ! -d "$merge_target/Contents/$directory" ]; }; then
+      printf '%s\n' "합치기 빠른 동작 폴더가 변경되었습니다: $directory" >&2
+      exit 1
+    fi
+  done
+  for file in Info.plist document.wflow Resources/en.lproj/InfoPlist.strings Resources/ko.lproj/InfoPlist.strings; do
+    if [ -L "$merge_target/Contents/$file" ] || { [ -e "$merge_target/Contents/$file" ] && [ ! -f "$merge_target/Contents/$file" ]; }; then
+      printf '%s\n' "합치기 빠른 동작 파일 위치가 변경되었습니다: $file" >&2
       exit 1
     fi
   done
@@ -138,6 +193,19 @@ if [ ! -L "$target" ] && [ -d "$target" ] && [ ! -L "$target/Contents" ] && [ -d
       exit 1
     fi
   done
+  review_installed="$target/Contents/Resources/$review_name"
+  inventory_installed="$target/Contents/Resources/$review_inventory"
+  if [ -e "$review_installed" ] || [ -L "$review_installed" ] || [ -e "$inventory_installed" ] || [ -L "$inventory_installed" ]; then
+    if [ -L "$review_installed" ] || [ ! -d "$review_installed" ] || [ -L "$inventory_installed" ] || [ ! -f "$inventory_installed" ] ||
+       [ -n "$(/usr/bin/find "$review_installed" ! -type f ! -type d -print)" ] ||
+       ! cmp -s "$review_installed/Contents/Resources/finder-pdf-owner" "$stage/Contents/Resources/$review_name/Contents/Resources/finder-pdf-owner"; then
+      printf '%s\n' '검토 앱이 없거나 소유권·파일 형식이 바뀌어 설치하지 않았습니다.' >&2; exit 1
+    fi
+    (cd "$review_installed" && /usr/bin/find -s . -type f -exec /usr/bin/shasum -a 256 {} \;) > "$stage/existing-review.sha256"
+    if ! cmp -s "$inventory_installed" "$stage/existing-review.sha256"; then
+      printf '%s\n' '검토 앱 내용이 바뀌어 설치하지 않았습니다.' >&2; exit 1
+    fi
+  fi
   mkdir -p "$target/Contents/Resources"
   for file in "${obsolete_resources[@]}"; do
     if [ -f "$target/Contents/Resources/$file" ]; then
@@ -147,6 +215,9 @@ if [ ! -L "$target" ] && [ -d "$target" ] && [ ! -L "$target/Contents" ] && [ -d
   for file in "${resources[@]}"; do
     mv -f "$stage/Contents/Resources/$file" "$target/Contents/Resources/$file"
   done
+  if [ -d "$review_installed" ]; then mv "$review_installed" "$stage/previous-review.app"; fi
+  mv "$stage/Contents/Resources/$review_name" "$target/Contents/Resources/$review_name"
+  mv -f "$stage/Contents/Resources/$review_inventory" "$target/Contents/Resources/$review_inventory"
   for directory in "${localizations[@]}"; do
     mkdir -p "$target/Contents/Resources/$directory"
   done
@@ -173,6 +244,16 @@ if [ -d "$print_target" ]; then
 else
   mv "$stage/print" "$print_target"
   printf '%s\n' "설치했습니다: $print_target"
+fi
+if [ -d "$merge_target" ]; then
+  mkdir -p "$merge_target/Contents/Resources/en.lproj" "$merge_target/Contents/Resources/ko.lproj"
+  for file in Info.plist document.wflow Resources/en.lproj/InfoPlist.strings Resources/ko.lproj/InfoPlist.strings; do
+    mv -f "$stage/merge/Contents/$file" "$merge_target/Contents/$file"
+  done
+  printf '%s\n' '합치기 빠른 동작을 갱신했습니다.'
+else
+  mv "$stage/merge" "$merge_target"
+  printf '%s\n' "설치했습니다: $merge_target"
 fi
 /System/Library/CoreServices/pbs -flush
 /System/Library/CoreServices/pbs -update

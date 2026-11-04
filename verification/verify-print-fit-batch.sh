@@ -56,11 +56,12 @@ for bad in "$docs/unsupported.bin" "$docs/broken.pdf" "$docs/broken.txt" "$docs/
 done
 
 # Malformed options cannot consume a selected filename or fall through to print.
-for mode in unknown missing-proof no-input; do
+for mode in unknown missing-proof no-input selection-without-output; do
     case $mode in
         unknown) args=(--proof "$workspace/rejected.pdf" --unknown -- "$docs/selected.PDF") ;;
         missing-proof) args=(--proof) ;;
         no-input) args=(--proof "$workspace/rejected.pdf" --) ;;
+        selection-without-output) args=(--no-dialog --selection "$workspace/any.json" -- "$docs/selected.PDF") ;;
     esac
     set +e
     /bin/bash "$run" "${args[@]}" >"$workspace/stdout" 2>"$workspace/stderr"
@@ -92,6 +93,44 @@ for ((index=0; index<4; index++)); do
     [[ $(/usr/bin/shasum -a 256 "$source") == "$expected" && -s "$workspace/generated-$index.pdf" ]] || fail 'generated path input changed or proof missing'
     [[ ! -e ${source%.*}.pdf ]] || fail 'generated input published adjacent PDF'
 done
+# The headless merge uses the same snapshots but preserves native PDF pages.
+# Selection indices still refer to the original batch after document reordering.
+printf '%s' '{"version":1,"cancelled":false,"files":[{"index":2,"pages":[1]},{"index":0,"pages":[1]}]}' > "$workspace/selection.json"
+/bin/bash "$run" --merge --output "$workspace/merged-all.pdf" -- "$docs/same.txt" "$docs/other/same.txt" "$docs/same.md" "$docs/selected.PDF" >"$workspace/stdout" 2>"$workspace/stderr" || fail 'headless merge failed'
+/bin/bash "$run" --merge --output "$workspace/merged-selected.pdf" --selection "$workspace/selection.json" -- "$docs/same.txt" "$docs/other/same.txt" "$docs/same.md" "$docs/selected.PDF" >"$workspace/stdout" 2>"$workspace/stderr" || fail 'selected merge failed'
+/bin/bash "$run" --proof "$workspace/proof-selected.pdf" --selection "$workspace/selection.json" -- "$docs/same.txt" "$docs/other/same.txt" "$docs/same.md" "$docs/selected.PDF" >"$workspace/stdout" 2>"$workspace/stderr" || fail 'selected proof failed'
+/usr/bin/osascript -l JavaScript - "$workspace/merged-all.pdf" "$workspace/merged-selected.pdf" "$workspace/proof-selected.pdf" <<'JXA' >/dev/null
+ObjC.import('Foundation'); ObjC.import('PDFKit');
+/** Assert actual emitted text and count across both selected native paths. */
+function run(argv) {
+    const all = $.PDFDocument.alloc.initWithURL($.NSURL.fileURLWithPath(argv[0]));
+    if (Number(all.pageCount) !== 4) throw Error('Merge dropped an input');
+    argv.slice(1).forEach(path => {
+        const doc = $.PDFDocument.alloc.initWithURL($.NSURL.fileURLWithPath(path));
+        if (Number(doc.pageCount) !== 2) throw Error('Selection count lost');
+        ['THIRDPRIVATEINPUT','FIRSTPRIVATEINPUT'].forEach((text,index) => {
+            if (!ObjC.unwrap(doc.pageAtIndex(index).string).includes(text)) throw Error('Selected order lost');
+        });
+    });
+}
+JXA
+[[ $(/usr/bin/shasum -a 256 "$docs/same.txt" "$docs/other/same.txt" "$docs/same.md" "$docs/same.pdf" "$docs/selected.PDF") == "$before" ]] || fail 'merge changed original inputs'
+printf '%s' '{"version":1,"cancelled":false,"files":[{"index":0,"pages":[1]}]}' > "$workspace/selection.json"
+for mode in invalid-omitted existing-merge linked-merge bad-selection missing-helper; do
+    case $mode in
+        invalid-omitted) args=(--merge --output "$workspace/rejected.pdf" --selection "$workspace/selection.json" -- "$docs/selected.PDF" "$docs/broken.pdf"); expected=1 ;;
+        existing-merge) args=(--merge --output "$workspace/existing.pdf" -- "$docs/selected.PDF"); expected=2 ;;
+        linked-merge) args=(--merge --output "$workspace/proof-link.pdf" -- "$docs/selected.PDF"); expected=2 ;;
+        bad-selection) printf '%s' '{"version":1,"cancelled":false,"files":[{"index":0,"pages":[0]}]}' > "$workspace/invalid.json"; args=(--merge --output "$workspace/rejected.pdf" --selection "$workspace/invalid.json" -- "$docs/selected.PDF"); expected=1 ;;
+        missing-helper) args=(--no-dialog -- "$docs/selected.PDF"); expected=2 ;;
+    esac
+    set +e
+    /bin/bash "$run" "${args[@]}" >"$workspace/stdout" 2>"$workspace/stderr"
+    status=$?
+    set -e
+    [[ $status == "$expected" && ! -e "$workspace/rejected.pdf" && -s "$workspace/stderr" ]] || fail "unsafe merge/review boundary: $mode"
+done
+# A merged output also refuses a competitor that wins after native rendering.
 # Inject a competing writer at the owned renderer boundary, after the real
 # native proof is complete but before the batch can publish the requested name.
 # This keeps the real conversion/render path while deterministically racing save.
@@ -115,5 +154,10 @@ FPDF_TEST_PROOF_RACE_PATH="$workspace/race.pdf" /bin/bash "$run" --proof "$works
 status=$?
 set -e
 [[ $status == 1 && $(cat "$workspace/race.pdf") == 'competing writer' ]] || fail 'racing proof writer overwritten'
+set +e
+FPDF_TEST_PROOF_RACE_PATH="$workspace/merge-race.pdf" /bin/bash "$run" --merge --output "$workspace/merge-race.pdf" -- "$docs/selected.PDF" >"$workspace/stdout" 2>"$workspace/stderr"
+status=$?
+set -e
+[[ $status == 1 && $(cat "$workspace/merge-race.pdf") == 'competing writer' ]] || fail 'racing merge writer overwritten'
 [[ -z $(find "$workspace" -name '.fpdf-proof.*' -print) ]] || fail 'proof staging leaked after publication failure'
-printf 'PASS: private all-or-nothing print batch, order, proof and paths\n'
+printf 'PASS: private all-or-nothing print/merge batch, selections, order, paths and exclusive saves\n'
