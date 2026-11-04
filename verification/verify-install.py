@@ -32,36 +32,68 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
     resources = target / 'Contents/Resources'
     check(result.returncode == 0 and all((resources / name).is_file() and (resources / name).read_bytes() == (source / name).read_bytes() for name in ('image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js', 'excel.applescript')), 'fresh alternate HOME install includes every renderer')
     check((target / 'Contents/project').is_symlink(), 'ownership marker installed')
-    localized = ('en.lproj/ServicesMenu.strings', 'ko.lproj/ServicesMenu.strings',
-                 'en.lproj/InfoPlist.strings', 'ko.lproj/InfoPlist.strings')
+    localized = ('en.lproj/InfoPlist.strings', 'ko.lproj/InfoPlist.strings')
+    obsolete = ('en.lproj/ServicesMenu.strings', 'ko.lproj/ServicesMenu.strings')
+    v1 = {f'{language}.lproj/ServicesMenu.strings':
+          ('/* Finder and Services menu title; key matches NSMenuItem.default. */\n'
+           f'"PDF로 변환" = "{title}";\n').encode()
+          for language, title in (('en', 'Convert to PDF'), ('ko', 'PDF로 변환'))}
     check(all((resources / name).is_file() and
               (resources / name).read_bytes() == (source / 'PDF로 변환.workflow/Contents/Resources' / name).read_bytes()
-              for name in localized), 'fresh install includes both native menu localizations')
+              for name in localized) and
+          all(not (resources / name).exists() for name in obsolete),
+          'fresh install retains InfoPlist translations without menu strings')
     (resources / 'convert.sh').write_text('old conversion\n')
-    check(run(home).returncode == 0 and (resources / 'convert.sh').read_bytes() == (source / 'convert.sh').read_bytes(), 'owned installation updated')
+    for name in obsolete:
+        (resources / name).write_bytes(v1[name])
+    check(run(home).returncode == 0 and all(not (resources / name).exists() for name in obsolete),
+          'upgrade removes exact v1 menu strings')
+    check((resources / 'convert.sh').read_bytes() == (source / 'convert.sh').read_bytes(),
+          'upgrade restores conversion helper bytes')
     for language in ('en', 'ko'):
         shutil.rmtree(resources / f'{language}.lproj')
-    check(run(home).returncode == 0 and all((resources / name).is_file() for name in localized),
-          'existing unlocalized installation gains both menu localizations')
-    installed_before = (resources / 'convert.sh').read_bytes()
-    localized_source = source / 'PDF로 변환.workflow/Contents/Resources/ko.lproj/ServicesMenu.strings'
+    check(run(home).returncode == 0 and all(
+        (resources / name).is_file() and
+        (resources / name).read_bytes() == (source / 'PDF로 변환.workflow/Contents/Resources' / name).read_bytes()
+        for name in localized), 'upgrade restores missing localization directories and translations')
+    for name in obsolete:
+        path = resources / name
+        for kind in ('different', 'symlink', 'directory', 'fifo'):
+            if kind == 'different':
+                path.write_text('unrelated content\n')
+            elif kind == 'symlink':
+                path.symlink_to(base / 'missing')
+            elif kind == 'directory':
+                path.mkdir()
+            else:
+                os.mkfifo(path)
+            before = (resources / 'convert.sh').read_bytes()
+            (source / 'convert.sh').write_text('changed before refusal\n')
+            check(run(home).returncode != 0 and (resources / 'convert.sh').read_bytes() == before and
+                  (path.exists() or path.is_symlink()), f'{kind} obsolete {name} preserved before update')
+            if kind == 'directory':
+                path.rmdir()
+            else:
+                path.unlink()
+    localized_source = source / 'PDF로 변환.workflow/Contents/Resources/ko.lproj/InfoPlist.strings'
     localized_source.rename(localized_source.with_suffix('.hidden'))
-    check(run(home).returncode != 0 and (resources / 'convert.sh').read_bytes() == installed_before,
+    before = (resources / 'convert.sh').read_bytes()
+    check(run(home).returncode != 0 and (resources / 'convert.sh').read_bytes() == before,
           'missing localization refuses before partial update')
     localized_source.with_suffix('.hidden').rename(localized_source)
     unrelated_locale = base / 'external-locale'
     shutil.copytree(resources / 'ko.lproj', unrelated_locale)
-    locale_before = (unrelated_locale / 'ServicesMenu.strings').read_bytes()
+    locale_before = (unrelated_locale / 'InfoPlist.strings').read_bytes()
     shutil.rmtree(resources / 'ko.lproj')
     (resources / 'ko.lproj').symlink_to(unrelated_locale, target_is_directory=True)
-    check(run(home).returncode != 0 and (unrelated_locale / 'ServicesMenu.strings').read_bytes() == locale_before,
+    check(run(home).returncode != 0 and (unrelated_locale / 'InfoPlist.strings').read_bytes() == locale_before,
           'symlink localization folder rejected without external writes')
     (resources / 'ko.lproj').unlink()
     shutil.copytree(unrelated_locale, resources / 'ko.lproj')
-    localized_file = resources / 'ko.lproj/ServicesMenu.strings'
+    localized_file = resources / 'ko.lproj/InfoPlist.strings'
     localized_file.unlink()
-    localized_file.symlink_to(unrelated_locale / 'ServicesMenu.strings')
-    check(run(home).returncode != 0 and (unrelated_locale / 'ServicesMenu.strings').read_bytes() == locale_before,
+    localized_file.symlink_to(unrelated_locale / 'InfoPlist.strings')
+    check(run(home).returncode != 0 and (unrelated_locale / 'InfoPlist.strings').read_bytes() == locale_before,
           'symlink localization file rejected without external writes')
     localized_file.unlink()
     shutil.copy2(localized_source, localized_file)

@@ -47,8 +47,7 @@ with tempfile.TemporaryDirectory(prefix='fpdf-doctor-') as temp:
     for app in ('Hancom Office HWP', 'Microsoft Word', 'Microsoft PowerPoint', 'Microsoft Excel'):
         assert app in output, 'app not reported individually: ' + app
     run(0, 'repeated matching diagnosis remains read-only')
-    for name in ('en.lproj/ServicesMenu.strings', 'ko.lproj/ServicesMenu.strings',
-                 'en.lproj/InfoPlist.strings', 'ko.lproj/InfoPlist.strings'):
+    for name in ('en.lproj/InfoPlist.strings', 'ko.lproj/InfoPlist.strings'):
         localized = resources / name
         original = localized.read_bytes()
         localized.unlink()
@@ -56,6 +55,14 @@ with tempfile.TemporaryDirectory(prefix='fpdf-doctor-') as temp:
         localized.write_text('stale translation\n')
         run(1, f'stale {name} rejected')
         localized.write_bytes(original)
+    for language in ('en', 'ko'):
+        obsolete = resources / f'{language}.lproj/ServicesMenu.strings'
+        obsolete.write_text('obsolete translation\n')
+        run(1, f'obsolete {language} menu strings reported')
+        obsolete.unlink()
+        obsolete.symlink_to(Path(temp) / 'missing')
+        run(1, f'linked obsolete {language} menu strings reported')
+        obsolete.unlink()
     locale = resources / 'ko.lproj'
     external_locale = Path(temp) / 'outside-locale'
     locale.rename(external_locale)

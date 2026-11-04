@@ -54,9 +54,12 @@ else
       printf '설치 확인 필요: 번역 폴더 없음 또는 링크 — %s\n' "$directory"
       status=1
     else
-      for file in ServicesMenu.strings InfoPlist.strings; do
-        check_file "$root/PDF로 변환.workflow/Contents/Resources/$directory/$file" "$target/Contents/Resources/$directory/$file" "$directory/$file"
-      done
+      check_file "$root/PDF로 변환.workflow/Contents/Resources/$directory/InfoPlist.strings" "$target/Contents/Resources/$directory/InfoPlist.strings" "$directory/InfoPlist.strings"
+      old="$target/Contents/Resources/$directory/ServicesMenu.strings"
+      if [ -e "$old" ] || [ -L "$old" ]; then
+        printf '설치 확인 필요: 오래된 메뉴 번역 파일 — %s/ServicesMenu.strings\n' "$directory"
+        status=1
+      fi
     fi
   done
 fi

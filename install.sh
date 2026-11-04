@@ -7,7 +7,8 @@ source="$root/PDF로 변환.workflow"
 target="$HOME/Library/Services/PDF로 변환.workflow"
 resources=(locale.sh preferred-language.js convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js)
 localizations=(en.lproj ko.lproj)
-bundle_resources=(en.lproj/ServicesMenu.strings en.lproj/InfoPlist.strings ko.lproj/ServicesMenu.strings ko.lproj/InfoPlist.strings)
+bundle_resources=(en.lproj/InfoPlist.strings ko.lproj/InfoPlist.strings)
+obsolete_resources=(en.lproj/ServicesMenu.strings ko.lproj/ServicesMenu.strings)
 for directory in Resources Resources/en.lproj Resources/ko.lproj; do
   if [ ! -d "$source/Contents/$directory" ] || [ -L "$source/Contents/$directory" ]; then
     printf '%s\n' "번역 폴더가 없거나 링크여서 설치할 수 없습니다: $directory" >&2
@@ -64,7 +65,6 @@ if [ ! -L "$target" ] && [ -d "$target" ] && [ ! -L "$target/Contents" ] && [ -d
       exit 1
     fi
   done
-  mkdir -p "$target/Contents/Resources"
   for file in "${resources[@]}"; do
     if [ -L "$target/Contents/Resources/$file" ] || [ -d "$target/Contents/Resources/$file" ]; then
       printf '%s\n' "실행 파일 위치가 변경되어 설치하지 않았습니다: $file" >&2
@@ -77,10 +77,32 @@ if [ ! -L "$target" ] && [ -d "$target" ] && [ ! -L "$target/Contents" ] && [ -d
       exit 1
     fi
   done
+  # Only the exact files installed by v1 are ours to remove. Check both
+  # before replacing anything, including broken links and special files.
+  for file in "${obsolete_resources[@]}"; do
+    old="$target/Contents/Resources/$file"
+    if [ -e "$old" ] || [ -L "$old" ]; then
+      case "$file" in
+        en.lproj/*) title='Convert to PDF' ;;
+        ko.lproj/*) title='PDF로 변환' ;;
+      esac
+      printf '/* Finder and Services menu title; key matches NSMenuItem.default. */\n"PDF로 변환" = "%s";\n' "$title" > "$stage/old-menu.strings"
+      if [ -L "$old" ] || [ ! -f "$old" ] || ! cmp -s "$old" "$stage/old-menu.strings"; then
+        printf '%s\n' "기존 메뉴 번역 파일이 변경되어 설치하지 않았습니다: $file" >&2
+        exit 1
+      fi
+    fi
+  done
   for file in Info.plist document.wflow; do
     if [ -L "$target/Contents/$file" ] || [ -d "$target/Contents/$file" ]; then
       printf '%s\n' "빠른 동작 파일 위치가 변경되어 설치하지 않았습니다: $file" >&2
       exit 1
+    fi
+  done
+  mkdir -p "$target/Contents/Resources"
+  for file in "${obsolete_resources[@]}"; do
+    if [ -f "$target/Contents/Resources/$file" ]; then
+      rm -- "$target/Contents/Resources/$file"
     fi
   done
   for file in "${resources[@]}"; do

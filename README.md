@@ -19,7 +19,7 @@ Tested on macOS 26.6.2. This is the tested version, not a stated minimum require
 
 Hancom HWP, Word, PowerPoint, and Excel must be installed as Mac apps; their web versions do not work with this tool. You only need the app for the file type you want to convert. Open each Office app once and finish its initial setup before using it here. File extensions are case-insensitive.
 
-The Quick Action menu and conversion results follow Finder’s preferred language: **Convert to PDF** in English and **PDF로 변환** in Korean. If Finder has no app-specific language setting, they follow the macOS preferred-language list. The first supported language (English or Korean) is used. If neither appears, English is used. Region settings and Terminal’s `LANG` do not select the interface language. Installer and installation-check (`doctor.sh`) messages remain in Korean.
+The Quick Action menu is **Convert to PDF** in English Finder and **PDF로 변환** in Korean Finder. Conversion results follow Finder’s preferred-language list, or the macOS list if Finder has no app-specific setting: they use the first supported language (English or Korean), and English if neither appears. For other Finder languages, the native menu can fall back to the registered default **PDF로 변환** even when results are in English; an English menu title is not guaranteed. Region settings and Terminal’s `LANG` do not select the result language. Installer and installation-check (`doctor.sh`) messages remain in Korean.
 
 <a id="설치"></a>
 
