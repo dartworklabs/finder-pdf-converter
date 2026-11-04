@@ -5,7 +5,7 @@ umask 077
 root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 source="$root/PDF로 변환.workflow"
 target="$HOME/Library/Services/PDF로 변환.workflow"
-resources=(convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js text.js markdown.js csv.js)
+resources=(convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js)
 for file in "${resources[@]}"; do
   if [ ! -f "$root/$file" ] || [ -L "$root/$file" ]; then
     printf '%s\n' "실행 파일이 없어 설치할 수 없습니다: $file" >&2

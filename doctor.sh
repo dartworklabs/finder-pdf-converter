@@ -17,7 +17,7 @@ if [ -z "${HOME:-}" ]; then
 fi
 root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 target="$HOME/Library/Services/PDF로 변환.workflow"
-resources=(convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js text.js markdown.js csv.js)
+resources=(convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js)
 status=0
 printf '%s\n' '확인: macOS'
 

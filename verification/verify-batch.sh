@@ -66,6 +66,9 @@ function run(argv) {
     }
 }
 JAVASCRIPT
+# The RAW adapter is a distinct owned JXA boundary. Reusing this fixture checks
+# routing and publication safety without claiming coverage of any camera format.
+cp "$workspace/app/image.js" "$workspace/app/dng.js"
 run="$workspace/app/convert.sh"
 docs="$workspace/docs"
 printf PASS > "$docs/good.docx"
@@ -98,6 +101,24 @@ mkdir "$workspace/empty-home"
 HOME="$workspace/empty-home" /bin/bash "$run" --no-dialog -- "$docs/shared.PNG" "$docs/shared.JPG" "$docs/photo.JPEG" "$docs/phone.HEIC" "$docs/photo2.HEIF" > "$workspace/images.txt"
 [[ -s "$docs/shared.pdf" && -s "$docs/photo.pdf" && -s "$docs/phone.pdf" && -s "$docs/photo2.pdf" ]] || fail 'image export missing'
 /usr/bin/grep -q '완료 4개 · 건너뜀 1개 · 실패 0개' "$workspace/images.txt"
+
+# Android DNG has its own JXA route, including uppercase extension handling.
+# A missing RAW adapter must fail even while the ordinary image adapter exists.
+printf 'PASS original RAW bytes' > "$docs/android.DNG"
+dng_before=$(/usr/bin/shasum -a 256 "$docs/android.DNG")
+HOME="$workspace/empty-home" /bin/bash "$run" --no-dialog -- "$docs/android.DNG" > "$workspace/dng.txt"
+[[ -s "$docs/android.pdf" ]] || fail 'DNG JXA route did not publish a PDF'
+[[ $(/usr/bin/shasum -a 256 "$docs/android.DNG") == "$dng_before" ]] || fail 'DNG original changed'
+/usr/bin/grep -q '완료 1개 · 건너뜀 0개 · 실패 0개' "$workspace/dng.txt"
+printf PASS > "$docs/missing-adapter.dng"
+mv "$workspace/app/dng.js" "$workspace/app/dng.js.hidden"
+set +e
+HOME="$workspace/empty-home" /bin/bash "$run" --no-dialog -- "$docs/missing-adapter.dng" > "$workspace/dng-missing.txt"
+status=$?
+set -e
+[[ $status == 1 && ! -e "$docs/missing-adapter.pdf" ]] || fail 'DNG adapter was bypassed'
+/usr/bin/grep -q '완료 0개 · 건너뜀 0개 · 실패 1개' "$workspace/dng-missing.txt"
+mv "$workspace/app/dng.js.hidden" "$workspace/app/dng.js"
 
 # A newline-ending directory must never resolve to its ordinary sibling.
 ordinary_directory="$docs/selected"

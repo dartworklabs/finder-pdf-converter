@@ -7,7 +7,7 @@ import tempfile
 
 REPO = Path(__file__).resolve().parents[1]
 HELPERS = ('convert.sh', 'hancom.applescript', 'word.applescript',
-           'powerpoint.applescript', 'excel.applescript', 'image.js',
+           'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js',
            'text.js', 'markdown.js', 'csv.js')
 
 
@@ -53,6 +53,12 @@ with tempfile.TemporaryDirectory(prefix='fpdf-doctor-') as temp:
     (resources / 'excel.applescript').unlink()
     run(1, 'missing helper rejected')
     shutil.copy2(REPO / 'excel.applescript', resources / 'excel.applescript')
+    (resources / 'dng.js').unlink()
+    run(1, 'missing DNG adapter rejected')
+    shutil.copy2(REPO / 'dng.js', resources / 'dng.js')
+    (resources / 'dng.js').write_text('stale DNG adapter\n')
+    run(1, 'stale DNG adapter rejected')
+    shutil.copy2(REPO / 'dng.js', resources / 'dng.js')
     (target / 'Contents/document.wflow').write_text('stale workflow\n')
     run(1, 'stale workflow metadata rejected')
     run(2, 'unexpected argument rejected', '--unexpected')

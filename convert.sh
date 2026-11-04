@@ -93,7 +93,7 @@ JAVASCRIPT
 }
 
 if [[ $# == 0 ]]; then
-    report '변환할 문서를 선택해 주세요. 지원 형식: HWP, HWPX, DOCX, PPTX, XLSX, CSV, PNG, JPG, JPEG, HEIC, HEIF, TXT, MD, MARKDOWN'
+    report '변환할 문서를 선택해 주세요. 지원 형식: HWP, HWPX, DOCX, PPTX, XLSX, CSV, PNG, JPG, JPEG, HEIC, HEIF, DNG, TXT, MD, MARKDOWN'
     exit 2
 fi
 
@@ -178,6 +178,7 @@ for selected in "$@"; do
         xlsx) adapter=excel.applescript ;;
         csv) adapter=text.js ;;
         png|jpg|jpeg|heic|heif) adapter=image.js ;;
+        dng) adapter=dng.js ;;
         txt|md|markdown) adapter=text.js ;;
         *) skipped=$((skipped + 1)); record "건너뜀: $name — 지원하지 않는 형식입니다."; continue ;;
     esac
@@ -251,7 +252,7 @@ for selected in "$@"; do
             continue
         fi
         /usr/bin/osascript -l JavaScript "$work_dir/text-adapter.js" "$copy" "$temporary_pdf" >"$work_dir/adapter-$index.txt" 2>"$error_file"
-    elif [[ $adapter == image.js ]]; then
+    elif [[ $adapter == image.js || $adapter == dng.js ]]; then
         /usr/bin/osascript -l JavaScript "$script_dir/$adapter" "$copy" "$temporary_pdf" >"$work_dir/adapter-$index.txt" 2>"$error_file"
     else
         /usr/bin/osascript "$script_dir/$adapter" "$copy" "$temporary_pdf" >"$work_dir/adapter-$index.txt" 2>"$error_file"

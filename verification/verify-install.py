@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
     base = Path(temp).resolve()
     source = base / "source ' $ checkout"
     source.mkdir()
-    for name in ['install.sh', 'convert.sh', 'hancom.applescript', 'word.applescript', 'powerpoint.applescript', 'excel.applescript', 'image.js', 'text.js', 'markdown.js', 'csv.js']:
+    for name in ['install.sh', 'convert.sh', 'hancom.applescript', 'word.applescript', 'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js']:
         shutil.copy2(REPO / name, source / name)
     shutil.copytree(REPO / 'PDF로 변환.workflow', source / 'PDF로 변환.workflow')
 
@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
     result = run(home)
     target = home / 'Library/Services/PDF로 변환.workflow'
     resources = target / 'Contents/Resources'
-    check(result.returncode == 0 and all((resources / name).is_file() and (resources / name).read_bytes() == (source / name).read_bytes() for name in ('image.js', 'text.js', 'markdown.js', 'csv.js', 'excel.applescript')), 'fresh alternate HOME install includes every renderer')
+    check(result.returncode == 0 and all((resources / name).is_file() and (resources / name).read_bytes() == (source / name).read_bytes() for name in ('image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js', 'excel.applescript')), 'fresh alternate HOME install includes every renderer')
     check((target / 'Contents/project').is_symlink(), 'ownership marker installed')
     (resources / 'convert.sh').write_text('old conversion\n')
     check(run(home).returncode == 0 and (resources / 'convert.sh').read_bytes() == (source / 'convert.sh').read_bytes(), 'owned installation updated')
@@ -61,14 +61,15 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
 
     # Every added resource participates in preflight and destination checks;
     # a missing helper must not partially replace an existing installation.
-    for helper in ('csv.js', 'excel.applescript'):
+    for helper in ('csv.js', 'excel.applescript', 'dng.js'):
         installed_before = (resources / 'convert.sh').read_bytes()
         (source / helper).rename(source / (helper + '.hidden'))
         result = run(home)
         check(result.returncode != 0 and (resources / 'convert.sh').read_bytes() == installed_before, f'missing {helper} refuses before partial update')
         (source / (helper + '.hidden')).rename(source / helper)
         installed_helper = resources / helper
-        installed_helper.unlink()
+        if installed_helper.exists() or installed_helper.is_symlink():
+            installed_helper.unlink()
         installed_helper.symlink_to(unrelated)
         result = run(home)
         check(result.returncode != 0 and installed_helper.is_symlink() and unrelated.read_text() == 'unrelated sentinel\n', f'symlink {helper} destination preserved')
