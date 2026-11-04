@@ -5,7 +5,9 @@ umask 077
 root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 source="$root/PDF로 변환.workflow"
 target="$HOME/Library/Services/PDF로 변환.workflow"
-resources=(locale.sh preferred-language.js convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js)
+print_source="$root/용지에 맞춰 인쇄.workflow"
+print_target="$HOME/Library/Services/용지에 맞춰 인쇄.workflow"
+resources=(locale.sh preferred-language.js convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js print-fit.sh print-fit.js)
 localizations=(en.lproj ko.lproj)
 bundle_resources=(en.lproj/InfoPlist.strings ko.lproj/InfoPlist.strings)
 obsolete_resources=(en.lproj/ServicesMenu.strings ko.lproj/ServicesMenu.strings)
@@ -18,6 +20,19 @@ done
 for file in "${bundle_resources[@]}"; do
   if [ ! -f "$source/Contents/Resources/$file" ] || [ -L "$source/Contents/Resources/$file" ]; then
     printf '%s\n' "번역 파일이 없거나 링크여서 설치할 수 없습니다: $file" >&2
+    exit 1
+  fi
+done
+# Validate the second bundle before either installed action can change.
+for file in Info.plist document.wflow Resources/en.lproj/InfoPlist.strings Resources/ko.lproj/InfoPlist.strings; do
+  if [ ! -f "$print_source/Contents/$file" ] || [ -L "$print_source/Contents/$file" ]; then
+    printf '%s\n' "인쇄 빠른 동작 파일이 없거나 링크입니다: $file" >&2
+    exit 1
+  fi
+done
+for directory in Contents Contents/Resources Contents/Resources/en.lproj Contents/Resources/ko.lproj; do
+  if [ ! -d "$print_source/$directory" ] || [ -L "$print_source/$directory" ]; then
+    printf '%s\n' "인쇄 빠른 동작 폴더가 없거나 링크입니다: $directory" >&2
     exit 1
   fi
 done
@@ -50,6 +65,30 @@ for file in "${bundle_resources[@]}"; do
 done
 cp "$source/Contents/Info.plist" "$source/Contents/document.wflow" "$stage/Contents/"
 ln -s "$root" "$stage/Contents/project"
+mkdir -p "$stage/print/Contents/Resources/en.lproj" "$stage/print/Contents/Resources/ko.lproj"
+for file in Info.plist document.wflow Resources/en.lproj/InfoPlist.strings Resources/ko.lproj/InfoPlist.strings; do
+  cp "$print_source/Contents/$file" "$stage/print/Contents/$file"
+done
+ln -s "$root" "$stage/print/Contents/project"
+# Reject foreign or redirected print bundles before modifying the converter.
+if [ -e "$print_target" ] || [ -L "$print_target" ]; then
+  if [ -L "$print_target" ] || [ ! -d "$print_target" ] || [ -L "$print_target/Contents" ] || [ ! -d "$print_target/Contents" ] || [ ! -L "$print_target/Contents/project" ] || [ "$(readlink "$print_target/Contents/project")" != "$root" ]; then
+    printf '%s\n' "기존 인쇄 빠른 동작이 있어 설치하지 않았습니다: $print_target" >&2
+    exit 1
+  fi
+  for directory in Resources Resources/en.lproj Resources/ko.lproj; do
+    if [ -L "$print_target/Contents/$directory" ] || { [ -e "$print_target/Contents/$directory" ] && [ ! -d "$print_target/Contents/$directory" ]; }; then
+      printf '%s\n' "인쇄 빠른 동작 폴더가 변경되었습니다: $directory" >&2
+      exit 1
+    fi
+  done
+  for file in Info.plist document.wflow Resources/en.lproj/InfoPlist.strings Resources/ko.lproj/InfoPlist.strings; do
+    if [ -L "$print_target/Contents/$file" ] || { [ -e "$print_target/Contents/$file" ] && [ ! -f "$print_target/Contents/$file" ]; }; then
+      printf '%s\n' "인쇄 빠른 동작 파일 위치가 변경되었습니다: $file" >&2
+      exit 1
+    fi
+  done
+fi
 # Replace only the legacy symlink produced for this exact checkout.
 if [ -L "$target" ] && [ "$(readlink "$target")" = "$source" ]; then
   unlink "$target"
@@ -124,6 +163,16 @@ else
   mkdir "$target"
   mv "$stage/Contents" "$target/Contents"
   printf '%s\n' "설치했습니다: $target"
+fi
+if [ -d "$print_target" ]; then
+  mkdir -p "$print_target/Contents/Resources/en.lproj" "$print_target/Contents/Resources/ko.lproj"
+  for file in Info.plist document.wflow Resources/en.lproj/InfoPlist.strings Resources/ko.lproj/InfoPlist.strings; do
+    mv -f "$stage/print/Contents/$file" "$print_target/Contents/$file"
+  done
+  printf '%s\n' '인쇄 빠른 동작을 갱신했습니다.'
+else
+  mv "$stage/print" "$print_target"
+  printf '%s\n' "설치했습니다: $print_target"
 fi
 /System/Library/CoreServices/pbs -flush
 /System/Library/CoreServices/pbs -update

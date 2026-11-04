@@ -2,7 +2,7 @@
 
 # Finder PDF Converter
 
-Convert one or more files to separate PDFs from Finder's Quick Actions menu.
+Convert one or more files to separate PDFs from Finder's Quick Actions menu, or print PDFs and supported source files with **Print to Fit**.
 
 | File type | Required app |
 | --- | --- |
@@ -19,7 +19,7 @@ Tested on macOS 26.6.2. This is the tested version, not a stated minimum require
 
 Hancom HWP, Word, PowerPoint, and Excel must be installed as Mac apps; their web versions do not work with this tool. You only need the app for the file type you want to convert. Open each Office app once and finish its initial setup before using it here. File extensions are case-insensitive.
 
-The Quick Action menu is **Convert to PDF** in English Finder and **PDF로 변환** in Korean Finder. Conversion results follow Finder’s preferred-language list, or the macOS list if Finder has no app-specific setting: they use the first supported language (English or Korean), and English if neither appears. For other Finder languages, the native menu can fall back to the registered default **PDF로 변환** even when results are in English; an English menu title is not guaranteed. Region settings and Terminal’s `LANG` do not select the result language. Installer and installation-check (`doctor.sh`) messages remain in Korean.
+The Quick Action menus are **Convert to PDF** and **Print to Fit** in English Finder, and **PDF로 변환** and **용지에 맞춰 인쇄** in Korean Finder. Conversion results follow Finder’s preferred-language list, or the macOS list if Finder has no app-specific setting: they use the first supported language (English or Korean), and English if neither appears. For other Finder languages, the native menus can fall back to the registered Korean defaults **PDF로 변환** and **용지에 맞춰 인쇄** even when results are in English; English menu titles are not guaranteed. Region settings and Terminal’s `LANG` do not select the result language. Installer and installation-check (`doctor.sh`) messages remain in Korean.
 
 <a id="설치"></a>
 
@@ -47,11 +47,11 @@ bash ./install.sh
 
 When you see `설치했습니다:` (“Installed:”) followed by a path, installation is complete. No administrator access or `sudo` is required.
 
-The installer copies the Quick Action and its executables to `~/Library/Services/PDF로 변환.workflow`. It will not overwrite an unrelated item with that name. It **only updates an installation made from the same source folder at the same absolute path**. It also refuses to update an installation whose folder or executables have been replaced with symbolic links.
+The installer copies two Quick Actions to `~/Library/Services/PDF로 변환.workflow` and `~/Library/Services/용지에 맞춰 인쇄.workflow`. The shared executables are kept in the conversion bundle, so keep that bundle installed when using Print to Fit. It will not overwrite an unrelated item with either name. It **only updates an installation made from the same source folder at the same absolute path**. It also refuses to update an installation whose folder or executables have been replaced with symbolic links.
 
 ### 3. Enable it in Finder
 
-Control-click or right-click a file in Finder and open **Quick Actions → Customize** (`빠른 동작 → 사용자화` on a Korean Mac). In the Finder extensions list, enable **Convert to PDF** (**PDF로 변환** in Korean). If it does not appear immediately, open a new Finder window and check again.
+Control-click or right-click a file in Finder and open **Quick Actions → Customize** (`빠른 동작 → 사용자화` on a Korean Mac). In the Finder extensions list, enable **Convert to PDF** (**PDF로 변환** in Korean) and **Print to Fit** (**용지에 맞춰 인쇄** in Korean). You can disable either menu item here later. If it does not appear immediately, open a new Finder window and check again.
 
 ### 4. Try a single PNG
 
@@ -65,7 +65,7 @@ If a PDF with that name already exists, the converter skips the file. Try anothe
 
 Once the PNG works, try the document types you need. If Office asks for folder access, see [Office folder access](#office-folder-access). For Hancom HWP permissions, see [Hancom HWP permissions and operation](#hancom-hwp-permissions-and-operation). Follow those instructions as well if macOS asks for permission to control an app.
 
-The installed bundle keeps its existing name, `PDF로 변환.workflow`, in both languages. Only the displayed menu label changes. The language of the PDF content and the required Korean interface of Hancom HWP are unaffected.
+The installed bundles keep the names `PDF로 변환.workflow` and `용지에 맞춰 인쇄.workflow` in both languages. Only the displayed menu labels change. The language of the PDF content and the required Korean interface of Hancom HWP are unaffected.
 
 ## Update
 
@@ -80,7 +80,7 @@ After updating the files, use the steps in [Run the installer](#2-run-the-instal
 bash ./install.sh
 ```
 
-When you see `설치를 갱신했습니다.` (“Installation updated.”), repeat the PNG check. If you see `기존 항목이 있어 설치하지 않았습니다:` (“Not installed because an item already exists:”), check that you are using the same source-folder path as the existing installation. To install from a new location, first remove your existing installation using the instructions below, then install from the new folder.
+The same installer updates both actions and adds Print to Fit to an older conversion-only installation. When you see `설치를 갱신했습니다.` (“Installation updated.”), repeat the PNG check, enable Print to Fit in Finder if needed, and check its printer and paper settings as described below. If you see `기존 항목이 있어 설치하지 않았습니다:` (“Not installed because an item already exists:”), check that you are using the same source-folder path as the existing installation. To install from a new location, first remove your existing installation using the instructions below, then install from the new folder.
 
 ## Check the installation
 
@@ -90,16 +90,30 @@ In Terminal, open the folder containing `install.sh` and run:
 bash ./doctor.sh
 ```
 
-This compares the current source folder's executables and Quick Action files with the installed copies, byte for byte. It does not change files or launch apps, and it does not print your actual home-directory path or email addresses. Exit codes are `0` if all files match, `1` for a missing installation, differing contents, or a read failure, and `2` for a non-macOS system or invalid execution conditions. See [Install](#install) and [Update](#update) if the installation needs attention.
+This compares both Quick Actions and the current source folder's shared executables with the installed copies, byte for byte. It does not change files or launch apps, and it does not print your actual home-directory path or email addresses. Exit codes are `0` if all files match, `1` for a missing installation, differing contents, or a read failure, and `2` for a non-macOS system or invalid execution conditions. See [Install](#install) and [Update](#update) if the installation needs attention.
 
 The check looks for Hancom HWP, Word, PowerPoint, and Excel under their standard app names in `/Applications` and `~/Applications`. Missing apps do not affect the exit code; check manually if you installed them elsewhere. This check does not verify app startup, licensing, macOS permissions, or actual conversion. Complete the [PNG check](#4-try-a-single-png) as well.
 
 ## Uninstall
 
 1. In Finder, choose **Go → Go to Folder…** and enter `~/Library/Services`.
-2. **Confirm that `PDF로 변환.workflow` is the item you installed with this tool**, then move only that item to the Trash. Do not remove an item of uncertain origin with the same name, or any other Quick Action.
+2. **Confirm that `PDF로 변환.workflow` and `용지에 맞춰 인쇄.workflow` are the items you installed with this tool**, then move those items to the Trash. Do not remove an item of uncertain origin with either name, or any other Quick Action.
 
-This removes the Quick Action only. Your source files and converted PDFs remain in place. No administrator access or `sudo` is required.
+To remove only Print to Fit, remove only `용지에 맞춰 인쇄.workflow`. Keep `PDF로 변환.workflow` because it holds the shared executables. To hide a menu without removing it, turn it off in Finder’s Quick Actions customization.
+
+This removes the Quick Actions only. Your source files and converted PDFs remain in place. No administrator access or `sudo` is required.
+
+## Print to Fit
+
+Select PDFs, or any source format in the table above, then choose **Quick Actions → Print to Fit** (**빠른 동작 → 용지에 맞춰 인쇄** in Korean). The action prepares the entire selection, then opens one macOS print panel for the combined pages. Choose the printer, paper, orientation, and copies, then press **Print**. The action prints every page in the selection and does not offer a page-range control. **Cancel** closes the panel without submitting a job.
+
+Each page is reduced only when needed to fit the selected printer’s printable area, centered, and rotated automatically when that gives a better fit. Small pages are not enlarged. The printable area comes from the printer driver, so it can differ by printer and paper. Original page margins remain part of the page; this action does not crop them away. The action sets job scaling to 100% and one page per sheet. Printer-specific driver settings can still affect the final output.
+
+Pages follow the order passed by Finder, with each document’s pages kept together. Identical file names are prepared separately. PDFs are read from private copies; other formats are converted using the same apps and limits described below. Save unsaved edits before starting. Unsupported, unreadable, symbolic-link, folder, or invalid inputs stop the entire batch before a print panel opens. A conversion failure also stops the batch; it never silently prints only the successful files.
+
+Print to Fit creates no PDF beside a source and never uses an existing adjacent PDF as a substitute for converting that source. Temporary copies and intermediate PDFs are removed after the panel closes or preparation fails. Its preparation errors follow the same Finder/macOS language selection as conversion results. The native print panel follows macOS’s own language settings.
+
+For a first check, select a PDF you can recognize, open Print to Fit, check the printer and paper settings, then cancel. For a small physical test, select a single-page document, open Print to Fit, choose the intended printer and paper, and print it. A proof PDF check alone does not verify paper feed or the physical printer’s output.
 
 ## Use
 
@@ -178,6 +192,20 @@ To run without the result dialog, use `--no-dialog`. Terminal conversion summari
 ```
 
 Exit codes are `0` when all files succeed or are skipped, `1` when any file fails, and `2` for missing input, startup failures, or another conversion already in progress.
+
+### Print from Terminal or make a proof
+
+```sh
+bash ./print-fit.sh -- "/absolute/path/report.pdf" "/absolute/path/photo.heic"
+```
+
+This opens the same single print panel as Finder. `--no-dialog` suppresses error alerts, but keeps the print panel. To exercise conversion and the same page renderer without submitting a physical job, give a new proof PDF path:
+
+```sh
+bash ./print-fit.sh --proof "/absolute/path/new-proof.pdf" -- "/absolute/path/report.pdf" "/absolute/path/report.docx"
+```
+
+Proof mode uses the current default printer and paper settings, opens no print panel, and never overwrites an existing file or symbolic link, including a name created by another writer while rendering. A default printer must be available. Exit codes for this entry are `0` for a completed native operation, saved proof, or user cancellation; `1` for a batch preparation/rendering failure; and `2` for usage or setup errors. A completed native print operation means submission succeeded, not that the printer has finished producing paper.
 
 ## License
 

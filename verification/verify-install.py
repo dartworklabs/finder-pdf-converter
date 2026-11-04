@@ -18,9 +18,10 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
     base = Path(temp).resolve()
     source = base / "source ' $ checkout"
     source.mkdir()
-    for name in ['install.sh', 'locale.sh', 'preferred-language.js', 'convert.sh', 'hancom.applescript', 'word.applescript', 'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js']:
+    for name in ['install.sh', 'locale.sh', 'preferred-language.js', 'convert.sh', 'hancom.applescript', 'word.applescript', 'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js', 'print-fit.sh', 'print-fit.js']:
         shutil.copy2(REPO / name, source / name)
     shutil.copytree(REPO / 'PDF로 변환.workflow', source / 'PDF로 변환.workflow')
+    shutil.copytree(REPO / '용지에 맞춰 인쇄.workflow', source / '용지에 맞춰 인쇄.workflow')
 
     def run(home):
         """Run the real installer with HOME isolated from the user's services."""
@@ -43,6 +44,23 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
               for name in localized) and
           all(not (resources / name).exists() for name in obsolete),
           'fresh install retains InfoPlist translations without menu strings')
+    print_target = home / 'Library/Services/용지에 맞춰 인쇄.workflow'
+    print_files = ('Info.plist', 'document.wflow', 'Resources/en.lproj/InfoPlist.strings', 'Resources/ko.lproj/InfoPlist.strings')
+    check(all((print_target / 'Contents' / name).read_bytes() == (source / '용지에 맞춰 인쇄.workflow/Contents' / name).read_bytes() for name in print_files) and all((resources / name).read_bytes() == (source / name).read_bytes() for name in ('print-fit.sh', 'print-fit.js')), 'both actions and print helpers installed')
+    # A foreign print action must block all updates, including converter files.
+    conflict_home = base / 'print-conflict-home'
+    foreign = conflict_home / 'Library/Services/용지에 맞춰 인쇄.workflow'
+    foreign.mkdir(parents=True)
+    (foreign / 'sentinel').write_text('untouched')
+    check(run(conflict_home).returncode != 0 and (foreign / 'sentinel').read_text() == 'untouched' and not (conflict_home / 'Library/Services/PDF로 변환.workflow').exists(), 'foreign print action blocks converter install')
+    before = (resources / 'convert.sh').read_bytes()
+    (source / 'convert.sh').write_text('new version\n')
+    bad_print_file = print_target / 'Contents/document.wflow'
+    bad_print_file.unlink()
+    bad_print_file.symlink_to(base / 'missing')
+    check(run(home).returncode != 0 and (resources / 'convert.sh').read_bytes() == before and bad_print_file.is_symlink(), 'print conflict blocks converter update')
+    bad_print_file.unlink()
+    shutil.copy2(source / '용지에 맞춰 인쇄.workflow/Contents/document.wflow', bad_print_file)
     (resources / 'convert.sh').write_text('old conversion\n')
     for name in obsolete:
         (resources / name).write_bytes(v1[name])
@@ -124,7 +142,7 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
 
     # Every added resource participates in preflight and destination checks;
     # a missing helper must not partially replace an existing installation.
-    for helper in ('csv.js', 'excel.applescript', 'dng.js', 'locale.sh', 'preferred-language.js'):
+    for helper in ('csv.js', 'excel.applescript', 'dng.js', 'locale.sh', 'preferred-language.js', 'print-fit.sh', 'print-fit.js'):
         installed_before = (resources / 'convert.sh').read_bytes()
         (source / helper).rename(source / (helper + '.hidden'))
         result = run(home)

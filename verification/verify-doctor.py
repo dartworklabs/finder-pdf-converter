@@ -8,7 +8,7 @@ import tempfile
 REPO = Path(__file__).resolve().parents[1]
 HELPERS = ('locale.sh', 'preferred-language.js', 'convert.sh', 'hancom.applescript', 'word.applescript',
            'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js',
-           'text.js', 'markdown.js', 'csv.js')
+           'text.js', 'markdown.js', 'csv.js', 'print-fit.sh', 'print-fit.js')
 
 
 def snapshot(folder):
@@ -39,6 +39,8 @@ with tempfile.TemporaryDirectory(prefix='fpdf-doctor-') as temp:
     run(1, 'missing workflow reported without creating installation')
     target = home / 'Library/Services/PDF로 변환.workflow'
     shutil.copytree(REPO / 'PDF로 변환.workflow', target)
+    print_target = home / 'Library/Services/용지에 맞춰 인쇄.workflow'
+    shutil.copytree(REPO / '용지에 맞춰 인쇄.workflow', print_target)
     resources = target / 'Contents/Resources'
     resources.mkdir(exist_ok=True)
     for name in HELPERS:
@@ -47,6 +49,14 @@ with tempfile.TemporaryDirectory(prefix='fpdf-doctor-') as temp:
     for app in ('Hancom Office HWP', 'Microsoft Word', 'Microsoft PowerPoint', 'Microsoft Excel'):
         assert app in output, 'app not reported individually: ' + app
     run(0, 'repeated matching diagnosis remains read-only')
+    print_workflow = print_target / 'Contents/document.wflow'
+    original_print_workflow = print_workflow.read_bytes()
+    print_workflow.write_text('stale print workflow')
+    run(1, 'stale print workflow rejected')
+    print_workflow.write_bytes(original_print_workflow)
+    (resources / 'print-fit.js').unlink()
+    run(1, 'missing print helper rejected')
+    shutil.copy2(REPO / 'print-fit.js', resources / 'print-fit.js')
     for name in ('en.lproj/InfoPlist.strings', 'ko.lproj/InfoPlist.strings'):
         localized = resources / name
         original = localized.read_bytes()
