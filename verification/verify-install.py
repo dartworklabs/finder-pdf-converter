@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
     base = Path(temp).resolve()
     source = base / "source ' $ checkout"
     source.mkdir()
-    for name in ['install.sh', 'convert.sh', 'hancom.applescript', 'word.applescript', 'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js']:
+    for name in ['install.sh', 'locale.sh', 'preferred-language.js', 'convert.sh', 'hancom.applescript', 'word.applescript', 'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js']:
         shutil.copy2(REPO / name, source / name)
     shutil.copytree(REPO / 'PDF로 변환.workflow', source / 'PDF로 변환.workflow')
 
@@ -32,8 +32,39 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
     resources = target / 'Contents/Resources'
     check(result.returncode == 0 and all((resources / name).is_file() and (resources / name).read_bytes() == (source / name).read_bytes() for name in ('image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js', 'excel.applescript')), 'fresh alternate HOME install includes every renderer')
     check((target / 'Contents/project').is_symlink(), 'ownership marker installed')
+    localized = ('en.lproj/ServicesMenu.strings', 'ko.lproj/ServicesMenu.strings',
+                 'en.lproj/InfoPlist.strings', 'ko.lproj/InfoPlist.strings')
+    check(all((resources / name).is_file() and
+              (resources / name).read_bytes() == (source / 'PDF로 변환.workflow/Contents/Resources' / name).read_bytes()
+              for name in localized), 'fresh install includes both native menu localizations')
     (resources / 'convert.sh').write_text('old conversion\n')
     check(run(home).returncode == 0 and (resources / 'convert.sh').read_bytes() == (source / 'convert.sh').read_bytes(), 'owned installation updated')
+    for language in ('en', 'ko'):
+        shutil.rmtree(resources / f'{language}.lproj')
+    check(run(home).returncode == 0 and all((resources / name).is_file() for name in localized),
+          'existing unlocalized installation gains both menu localizations')
+    installed_before = (resources / 'convert.sh').read_bytes()
+    localized_source = source / 'PDF로 변환.workflow/Contents/Resources/ko.lproj/ServicesMenu.strings'
+    localized_source.rename(localized_source.with_suffix('.hidden'))
+    check(run(home).returncode != 0 and (resources / 'convert.sh').read_bytes() == installed_before,
+          'missing localization refuses before partial update')
+    localized_source.with_suffix('.hidden').rename(localized_source)
+    unrelated_locale = base / 'external-locale'
+    shutil.copytree(resources / 'ko.lproj', unrelated_locale)
+    locale_before = (unrelated_locale / 'ServicesMenu.strings').read_bytes()
+    shutil.rmtree(resources / 'ko.lproj')
+    (resources / 'ko.lproj').symlink_to(unrelated_locale, target_is_directory=True)
+    check(run(home).returncode != 0 and (unrelated_locale / 'ServicesMenu.strings').read_bytes() == locale_before,
+          'symlink localization folder rejected without external writes')
+    (resources / 'ko.lproj').unlink()
+    shutil.copytree(unrelated_locale, resources / 'ko.lproj')
+    localized_file = resources / 'ko.lproj/ServicesMenu.strings'
+    localized_file.unlink()
+    localized_file.symlink_to(unrelated_locale / 'ServicesMenu.strings')
+    check(run(home).returncode != 0 and (unrelated_locale / 'ServicesMenu.strings').read_bytes() == locale_before,
+          'symlink localization file rejected without external writes')
+    localized_file.unlink()
+    shutil.copy2(localized_source, localized_file)
 
     outsider = base / 'external-resources'
     shutil.copytree(resources, outsider)
@@ -61,7 +92,7 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
 
     # Every added resource participates in preflight and destination checks;
     # a missing helper must not partially replace an existing installation.
-    for helper in ('csv.js', 'excel.applescript', 'dng.js'):
+    for helper in ('csv.js', 'excel.applescript', 'dng.js', 'locale.sh', 'preferred-language.js'):
         installed_before = (resources / 'convert.sh').read_bytes()
         (source / helper).rename(source / (helper + '.hidden'))
         result = run(home)

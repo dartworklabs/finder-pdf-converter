@@ -5,7 +5,21 @@ umask 077
 root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 source="$root/PDF로 변환.workflow"
 target="$HOME/Library/Services/PDF로 변환.workflow"
-resources=(convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js)
+resources=(locale.sh preferred-language.js convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js)
+localizations=(en.lproj ko.lproj)
+bundle_resources=(en.lproj/ServicesMenu.strings en.lproj/InfoPlist.strings ko.lproj/ServicesMenu.strings ko.lproj/InfoPlist.strings)
+for directory in Resources Resources/en.lproj Resources/ko.lproj; do
+  if [ ! -d "$source/Contents/$directory" ] || [ -L "$source/Contents/$directory" ]; then
+    printf '%s\n' "번역 폴더가 없거나 링크여서 설치할 수 없습니다: $directory" >&2
+    exit 1
+  fi
+done
+for file in "${bundle_resources[@]}"; do
+  if [ ! -f "$source/Contents/Resources/$file" ] || [ -L "$source/Contents/Resources/$file" ]; then
+    printf '%s\n' "번역 파일이 없거나 링크여서 설치할 수 없습니다: $file" >&2
+    exit 1
+  fi
+done
 for file in "${resources[@]}"; do
   if [ ! -f "$root/$file" ] || [ -L "$root/$file" ]; then
     printf '%s\n' "실행 파일이 없어 설치할 수 없습니다: $file" >&2
@@ -27,6 +41,12 @@ mkdir "$stage/Contents" "$stage/Contents/Resources"
 for file in "${resources[@]}"; do
   cp "$root/$file" "$stage/Contents/Resources/$file"
 done
+for directory in "${localizations[@]}"; do
+  mkdir "$stage/Contents/Resources/$directory"
+done
+for file in "${bundle_resources[@]}"; do
+  cp "$source/Contents/Resources/$file" "$stage/Contents/Resources/$file"
+done
 cp "$source/Contents/Info.plist" "$source/Contents/document.wflow" "$stage/Contents/"
 ln -s "$root" "$stage/Contents/project"
 # Replace only the legacy symlink produced for this exact checkout.
@@ -38,10 +58,22 @@ if [ ! -L "$target" ] && [ -d "$target" ] && [ ! -L "$target/Contents" ] && [ -d
     printf '%s\n' "실행 파일 폴더가 변경되어 설치하지 않았습니다: $target/Contents/Resources" >&2
     exit 1
   fi
+  for directory in "${localizations[@]}"; do
+    if [ -L "$target/Contents/Resources/$directory" ] || { [ -e "$target/Contents/Resources/$directory" ] && [ ! -d "$target/Contents/Resources/$directory" ]; }; then
+      printf '%s\n' "번역 폴더가 변경되어 설치하지 않았습니다: $directory" >&2
+      exit 1
+    fi
+  done
   mkdir -p "$target/Contents/Resources"
   for file in "${resources[@]}"; do
     if [ -L "$target/Contents/Resources/$file" ] || [ -d "$target/Contents/Resources/$file" ]; then
       printf '%s\n' "실행 파일 위치가 변경되어 설치하지 않았습니다: $file" >&2
+      exit 1
+    fi
+  done
+  for file in "${bundle_resources[@]}"; do
+    if [ -L "$target/Contents/Resources/$file" ] || [ -d "$target/Contents/Resources/$file" ]; then
+      printf '%s\n' "번역 파일 위치가 변경되어 설치하지 않았습니다: $file" >&2
       exit 1
     fi
   done
@@ -52,6 +84,12 @@ if [ ! -L "$target" ] && [ -d "$target" ] && [ ! -L "$target/Contents" ] && [ -d
     fi
   done
   for file in "${resources[@]}"; do
+    mv -f "$stage/Contents/Resources/$file" "$target/Contents/Resources/$file"
+  done
+  for directory in "${localizations[@]}"; do
+    mkdir -p "$target/Contents/Resources/$directory"
+  done
+  for file in "${bundle_resources[@]}"; do
     mv -f "$stage/Contents/Resources/$file" "$target/Contents/Resources/$file"
   done
   mv -f "$stage/Contents/Info.plist" "$target/Contents/Info.plist"

@@ -19,7 +19,7 @@ Tested on macOS 26.6.2. This is the tested version, not a stated minimum require
 
 Hancom HWP, Word, PowerPoint, and Excel must be installed as Mac apps; their web versions do not work with this tool. You only need the app for the file type you want to convert. Open each Office app once and finish its initial setup before using it here. File extensions are case-insensitive.
 
-The Quick Action, result dialogs, and installer messages currently use Korean. This guide includes the Korean labels you will see, with English explanations.
+The Quick Action menu and conversion results follow Finder’s preferred language: **Convert to PDF** in English and **PDF로 변환** in Korean. If Finder has no app-specific language setting, they follow the macOS preferred-language list. The first supported language (English or Korean) is used. If neither appears, English is used. Region settings and Terminal’s `LANG` do not select the interface language. Installer and installation-check (`doctor.sh`) messages remain in Korean.
 
 <a id="설치"></a>
 
@@ -51,19 +51,21 @@ The installer copies the Quick Action and its executables to `~/Library/Services
 
 ### 3. Enable it in Finder
 
-Control-click or right-click a file in Finder and open **Quick Actions → Customize** (`빠른 동작 → 사용자화` on a Korean Mac). In the Finder extensions list, enable **PDF로 변환** (“Convert to PDF”). If it does not appear immediately, open a new Finder window and check again.
+Control-click or right-click a file in Finder and open **Quick Actions → Customize** (`빠른 동작 → 사용자화` on a Korean Mac). In the Finder extensions list, enable **Convert to PDF** (**PDF로 변환** in Korean). If it does not appear immediately, open a new Finder window and check again.
 
 ### 4. Try a single PNG
 
 Start with a PNG, which needs no additional app. Put a PNG, such as a screenshot, in a folder you can write to. Make sure there is no PDF with the same base name in that folder.
 
-1. Control-click or right-click the PNG in Finder and choose **Quick Actions → PDF로 변환** (“Convert to PDF”).
-2. Check that the result dialog says **완료 1개 · 건너뜀 0개 · 실패 0개** (“Completed: 1 · Skipped: 0 · Failed: 0”).
+1. Control-click or right-click the PNG in Finder and choose **Quick Actions → Convert to PDF** (**빠른 동작 → PDF로 변환** in Korean).
+2. Check that the result dialog says **Completed: 1 · Skipped: 0 · Failed: 0** (**완료 1개 · 건너뜀 0개 · 실패 0개** in Korean).
 3. Check that a PDF with the same base name appears beside the PNG. Open it and confirm that the image is visible.
 
 If a PDF with that name already exists, the converter skips the file. Try another PNG or rename the existing PDF before trying again.
 
 Once the PNG works, try the document types you need. If Office asks for folder access, see [Office folder access](#office-folder-access). For Hancom HWP permissions, see [Hancom HWP permissions and operation](#hancom-hwp-permissions-and-operation). Follow those instructions as well if macOS asks for permission to control an app.
+
+The installed bundle keeps its existing name, `PDF로 변환.workflow`, in both languages. Only the displayed menu label changes. The language of the PDF content and the required Korean interface of Hancom HWP are unaffected.
 
 ## Update
 
@@ -101,7 +103,7 @@ This removes the Quick Action only. Your source files and converted PDFs remain 
 
 ## Use
 
-Select files in Finder, Control-click or right-click, and choose **Quick Actions → PDF로 변환** (“Convert to PDF”). Each PDF is saved beside its source with the same base name: for example, `report.docx` becomes `report.pdf`. Selecting multiple files creates a separate PDF for each file; it does not merge them. The result dialog shows completed, skipped, and failed counts, along with a result for each file.
+Select files in Finder, Control-click or right-click, and choose **Quick Actions → Convert to PDF** (**빠른 동작 → PDF로 변환** in Korean). Each PDF is saved beside its source with the same base name: for example, `report.docx` becomes `report.pdf`. Selecting multiple files creates a separate PDF for each file; it does not merge them. The result dialog shows completed, skipped, and failed counts, along with a result for each file. Its title, confirmation button, and converter-authored reasons use the same language. File names and paths retain their original spelling; unrecognized app or macOS diagnostics may appear verbatim beneath **Technical details**.
 
 Existing PDFs are never overwritten. If you select files with the same base name in the same folder, such as `report.docx` and `report.png`, the first successful conversion creates `report.pdf` and the others are skipped. Unsupported file types are skipped. Unreadable files, symbolic links, and corrupt files are reported as failures. A failure does not stop the remaining files from being processed.
 
@@ -169,7 +171,7 @@ Close any save dialogs or warning dialogs in Hancom HWP before starting. During 
 
 ## Run from Terminal
 
-To run without the result dialog, use `--no-dialog`. Put paths containing spaces in quotes:
+To run without the result dialog, use `--no-dialog`. Terminal conversion summaries follow the same Finder/macOS language choice as the Quick Action; changing `LANG` does not change them. Put paths containing spaces in quotes:
 
 ```sh
 ./convert.sh --no-dialog -- "/absolute/path/report.docx" "/absolute/path/photo.heic"

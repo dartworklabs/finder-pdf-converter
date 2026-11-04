@@ -5,8 +5,11 @@ by returning the same message. Native UTF-8 decoding and macOS exec limits remai
 real; no installed service, document app, or persistent summary log is touched.
 """
 import os
+import ast
 from pathlib import Path
 import plistlib
+import shutil
+import shlex
 import subprocess
 import tempfile
 
@@ -14,7 +17,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 
 def verify_reports() -> None:
-    """Require ordinary and over-ARG_MAX summaries to reach both native dialogs."""
+    """Require lossless summaries and both locale labels across native dialog boundaries."""
     with tempfile.TemporaryDirectory(prefix='fpdf-report-') as temporary:
         root = Path(temporary)
         shim = root / 'osascript'
@@ -44,6 +47,7 @@ else:
     payload = script.encode('utf-8')
 result = subprocess.run(['/usr/bin/osascript', *args], input=payload, capture_output=True)
 Path(os.environ['FPDF_REPORT_OBSERVED']).write_bytes(result.stdout)
+Path(os.environ['FPDF_REPORT_OBSERVED'] + '.args').write_text(repr(args[-2:]))
 sys.stderr.buffer.write(result.stderr)
 raise SystemExit(result.returncode)
 ''')
@@ -51,12 +55,15 @@ raise SystemExit(result.returncode)
         converter = (REPO / 'convert.sh').read_text()
         # Source the converter's definitions without running its batch main.
         definitions = converter.split('if [[ $# == 0 ]]; then', 1)[0]
+        definitions = definitions.replace('script_dir=$(CDPATH=\'\' cd -P -- "$(dirname -- "$0")" && pwd) || exit 2', 'script_dir=' + shlex.quote(str(REPO)))
         definitions = definitions.replace('/usr/bin/osascript', str(shim))
         workflow = plistlib.loads((REPO / 'PDF로 변환.workflow/Contents/document.wflow').read_bytes())
         action = workflow['actions'][0]['action']['ActionParameters']['COMMAND_STRING']
         action = action.replace('/usr/bin/osascript', str(shim))
         resources = root / 'Library/Services/PDF로 변환.workflow/Contents/Resources'
         resources.mkdir(parents=True)
+        shutil.copy2(REPO / 'locale.sh', resources / 'locale.sh')
+        shutil.copy2(REPO / 'preferred-language.js', resources / 'preferred-language.js')
         (resources / 'convert.sh').write_text('#!/bin/bash\n/bin/cat "$FPDF_REPORT_FIXTURE"\n')
         ordinary = "완료 1개 · 실패 1개\n한글 '인용' $값 😀\n실패: 문서.docx — 확인해 주세요."
         # A valid argv-sized selection can create a larger per-file error list.
@@ -66,17 +73,25 @@ raise SystemExit(result.returncode)
         generator = random.Random(1731)
         alphabet = list('가A0\n\t\"\' $`\\') + ['😀', '𝄞', 'é', 'e\u0301']
         generated = [('generated-' + str(index), ''.join(generator.choice(alphabet) for _ in range(250)).rstrip('\n')) for index in range(5)]
-        for label, message in [('ordinary', ordinary), ('large', large.rstrip('\n'))] + generated:
-            fixture = root / 'message.txt'
-            fixture.write_text(message)
-            for boundary, script in [('converter', definitions + '\nreport "$(/bin/cat "$FPDF_REPORT_FIXTURE")"\n'), ('finder', action)]:
-                observed = root / (label + '-' + boundary + '.txt')
-                environment = {**os.environ, 'HOME': str(root), 'FPDF_REPORT_FIXTURE': str(fixture), 'FPDF_REPORT_OBSERVED': str(observed)}
-                result = subprocess.run(['/bin/bash', '-c', script], env=environment, capture_output=True)
-                assert observed.exists(), f'{boundary} {label}: summary never reached dialog transport (status {result.returncode})'
-                assert observed.read_bytes() == (message + '\n').encode(), f'{boundary} {label}: summary text changed or native decode failed'
-                assert result.returncode == 0, f'{boundary} {label}: reporting failed'
-                print(f'PASS: {boundary} {label} summary reaches native presentation unchanged ({len(message.encode())} bytes)')
+        for language, title, button in [('en', 'PDF Conversion Results', 'OK'), ('ko', 'PDF 변환 결과', '확인')]:
+            catalog = (REPO / 'locale.sh').read_text()
+            catalog = catalog.replace('/usr/bin/osascript -l JavaScript "$1"',
+                                      '/usr/bin/osascript -l JavaScript "$1" -AppleLanguages \'(' + language + ')\'')
+            (resources / 'locale.sh').write_text(catalog)
+            for label, message in [('ordinary', ordinary), ('large', large.rstrip('\n'))] + generated:
+                fixture = root / 'message.txt'
+                fixture.write_text(message)
+                converter_script = definitions + '\nfpdf_locale=' + language + '\nreport "$(/bin/cat "$FPDF_REPORT_FIXTURE")"\n'
+                for boundary, script in [('converter', converter_script), ('finder', action)]:
+                    observed = root / (language + '-' + label + '-' + boundary + '.txt')
+                    environment = {**os.environ, 'HOME': str(root), 'FPDF_REPORT_FIXTURE': str(fixture), 'FPDF_REPORT_OBSERVED': str(observed)}
+                    result = subprocess.run(['/bin/bash', '-c', script], env=environment, capture_output=True)
+                    assert observed.exists(), f'{boundary} {label}: summary never reached dialog transport (status {result.returncode})'
+                    assert observed.read_bytes() == (message + '\n').encode(), f'{boundary} {label}: summary text changed or native decode failed'
+                    assert ast.literal_eval(Path(str(observed) + '.args').read_text()) == [title, button], f'{boundary} {language}: native title/button not localized'
+                    assert result.returncode == 0, f'{boundary} {label}: reporting failed'
+                    print(f'PASS: {boundary} {language} {label} unchanged summary and localized title/button ({len(message.encode())} bytes)')
+
 
 
 if __name__ == '__main__':

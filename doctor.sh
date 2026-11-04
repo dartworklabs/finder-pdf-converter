@@ -17,7 +17,7 @@ if [ -z "${HOME:-}" ]; then
 fi
 root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 target="$HOME/Library/Services/PDF로 변환.workflow"
-resources=(convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js)
+resources=(locale.sh preferred-language.js convert.sh hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js)
 status=0
 printf '%s\n' '확인: macOS'
 
@@ -48,6 +48,16 @@ else
   done
   for file in "${resources[@]}"; do
     check_file "$root/$file" "$target/Contents/Resources/$file" "$file"
+  done
+  for directory in en.lproj ko.lproj; do
+    if [ ! -d "$target/Contents/Resources/$directory" ] || [ -L "$target/Contents/Resources/$directory" ]; then
+      printf '설치 확인 필요: 번역 폴더 없음 또는 링크 — %s\n' "$directory"
+      status=1
+    else
+      for file in ServicesMenu.strings InfoPlist.strings; do
+        check_file "$root/PDF로 변환.workflow/Contents/Resources/$directory/$file" "$target/Contents/Resources/$directory/$file" "$directory/$file"
+      done
+    fi
   done
 fi
 

@@ -17,6 +17,8 @@ workspace=$(/usr/bin/mktemp -d /private/tmp/fpdf-check.XXXXXX)
 trap '/bin/rm -r -- "$workspace"' EXIT
 mkdir "$workspace/app" "$workspace/docs"
 cp "$converter" "$workspace/app/convert.sh"
+# Include the language boundary alongside every isolated converter fixture.
+cp "$here/../locale.sh" "$here/../preferred-language.js" "$workspace/app/"
 export FPDF_FIXTURE="$here/blank.pdf"
 export FPDF_READY="$workspace/ready"
 export FPDF_RACE_PATH="$workspace/docs/race.pdf"
@@ -88,7 +90,7 @@ set -e
 [[ -s "$docs/한글 ' 인용 \$ 문서.pdf" ]] || fail 'Korean filename export missing'
 [[ ! -e "$docs/invalid.pdf" && ! -e "$docs/fail.pdf" ]] || fail 'failed export published'
 [[ $(/usr/bin/shasum -a 256 "${originals[@]}") == "$before" ]] || fail 'original file changed'
-/usr/bin/grep -q '완료 1개 · 건너뜀 2개 · 실패 3개' "$workspace/mixed.txt"
+/usr/bin/grep -Eq '^(완료 1개 · 건너뜀 2개 · 실패 3개|Completed: 1 · Skipped: 2 · Failed: 3)$' "$workspace/mixed.txt"
 
 # Mixed formats sharing a stem publish only the first output. Images do not
 # depend on a PowerPoint container, even when HOME has no Office installation.
@@ -100,7 +102,7 @@ printf PASS > "$docs/photo2.HEIF"
 mkdir "$workspace/empty-home"
 HOME="$workspace/empty-home" /bin/bash "$run" --no-dialog -- "$docs/shared.PNG" "$docs/shared.JPG" "$docs/photo.JPEG" "$docs/phone.HEIC" "$docs/photo2.HEIF" > "$workspace/images.txt"
 [[ -s "$docs/shared.pdf" && -s "$docs/photo.pdf" && -s "$docs/phone.pdf" && -s "$docs/photo2.pdf" ]] || fail 'image export missing'
-/usr/bin/grep -q '완료 4개 · 건너뜀 1개 · 실패 0개' "$workspace/images.txt"
+/usr/bin/grep -Eq '^(완료 4개 · 건너뜀 1개 · 실패 0개|Completed: 4 · Skipped: 1 · Failed: 0)$' "$workspace/images.txt"
 
 # Android DNG has its own JXA route, including uppercase extension handling.
 # A missing RAW adapter must fail even while the ordinary image adapter exists.
@@ -109,7 +111,7 @@ dng_before=$(/usr/bin/shasum -a 256 "$docs/android.DNG")
 HOME="$workspace/empty-home" /bin/bash "$run" --no-dialog -- "$docs/android.DNG" > "$workspace/dng.txt"
 [[ -s "$docs/android.pdf" ]] || fail 'DNG JXA route did not publish a PDF'
 [[ $(/usr/bin/shasum -a 256 "$docs/android.DNG") == "$dng_before" ]] || fail 'DNG original changed'
-/usr/bin/grep -q '완료 1개 · 건너뜀 0개 · 실패 0개' "$workspace/dng.txt"
+/usr/bin/grep -Eq '^(완료 1개 · 건너뜀 0개 · 실패 0개|Completed: 1 · Skipped: 0 · Failed: 0)$' "$workspace/dng.txt"
 printf PASS > "$docs/missing-adapter.dng"
 mv "$workspace/app/dng.js" "$workspace/app/dng.js.hidden"
 set +e
@@ -117,7 +119,7 @@ HOME="$workspace/empty-home" /bin/bash "$run" --no-dialog -- "$docs/missing-adap
 status=$?
 set -e
 [[ $status == 1 && ! -e "$docs/missing-adapter.pdf" ]] || fail 'DNG adapter was bypassed'
-/usr/bin/grep -q '완료 0개 · 건너뜀 0개 · 실패 1개' "$workspace/dng-missing.txt"
+/usr/bin/grep -Eq '^(완료 0개 · 건너뜀 0개 · 실패 1개|Completed: 0 · Skipped: 0 · Failed: 1)$' "$workspace/dng-missing.txt"
 mv "$workspace/app/dng.js.hidden" "$workspace/app/dng.js"
 
 # A newline-ending directory must never resolve to its ordinary sibling.
@@ -199,13 +201,13 @@ set -e
 [[ $status == 1 ]] || fail 'symlink input accepted'
 [[ -d "$docs/directory.pdf" && -L "$docs/broken-link.pdf" ]] || fail 'occupied output changed'
 [[ ! -e "$docs/input-link.pdf" ]] || fail 'symlink input exported'
-/usr/bin/grep -q '완료 0개 · 건너뜀 2개 · 실패 1개' "$workspace/paths.txt"
+/usr/bin/grep -Eq '^(완료 0개 · 건너뜀 2개 · 실패 1개|Completed: 0 · Skipped: 2 · Failed: 1)$' "$workspace/paths.txt"
 
 # A competing writer must win without being overwritten after initial checks.
 printf RACE > "$docs/race.docx"
 /bin/bash "$run" --no-dialog -- "$docs/race.docx" > "$workspace/race.txt"
 [[ $(cat "$docs/race.pdf") == sentinel ]] || fail 'racing writer overwritten'
-/usr/bin/grep -q '완료 0개 · 건너뜀 1개 · 실패 0개' "$workspace/race.txt"
+/usr/bin/grep -Eq '^(완료 0개 · 건너뜀 1개 · 실패 0개|Completed: 0 · Skipped: 1 · Failed: 0)$' "$workspace/race.txt"
 
 # Generated path variations preserve the input bytes even if an app edits copies.
 RANDOM=1731
@@ -287,7 +289,7 @@ set -e
 [[ $status == 1 ]] || fail 'HEIF bad-input batch exit code'
 [[ -s "$workspace/heif/oriented.pdf" && -s "$workspace/heif/primary.pdf" ]] || fail 'native HEIF export missing'
 [[ $(/usr/bin/find "$workspace/heif" -name '*.pdf' | /usr/bin/wc -l | /usr/bin/tr -d ' ') == 2 ]] || fail 'unsupported or truncated HEIF published'
-/usr/bin/grep -q '완료 2개 · 건너뜀 0개 · 실패 8개' "$workspace/heif.txt"
+/usr/bin/grep -Eq '^(완료 2개 · 건너뜀 0개 · 실패 8개|Completed: 2 · Skipped: 0 · Failed: 8)$' "$workspace/heif.txt"
 [[ $(/usr/bin/shasum -a 256 "$workspace/heif"/*.heic "$workspace/heif"/*.heif "$workspace/heif"/*.HEIC | /usr/bin/sort) == $(printf '%s\n' "$heif_before" | /usr/bin/sort) ]] || fail 'HEIF original changed'
 /usr/bin/osascript -l JavaScript - "$workspace/heif" <<'JAVASCRIPT' >/dev/null
 ObjC.import('AppKit');

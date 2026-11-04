@@ -24,7 +24,7 @@ status=$?
 set -e
 [[ $status == 1 ]] || fail 'malformed input did not fail batch'
 [[ -s "$workspace/긴 문서.pdf" && -s "$workspace/문서.pdf" && -s "$workspace/별칭.pdf" && ! -e "$workspace/잘못된.pdf" ]] || fail 'unexpected outputs'
-/usr/bin/grep -q '완료 3개 · 건너뜀 0개 · 실패 1개' "$workspace/result.log" || fail 'unexpected batch summary'
+/usr/bin/grep -Eq '^(완료 3개 · 건너뜀 0개 · 실패 1개|Completed: 3 · Skipped: 0 · Failed: 1)$' "$workspace/result.log" || fail 'unexpected batch summary'
 [[ $(/usr/bin/shasum -a 256 "$workspace"/*.TXT "$workspace"/*.MD "$workspace"/*.MARKDOWN "$workspace"/*.txt) == "$before" ]] || fail 'source changed'
 /usr/bin/osascript -l JavaScript - "$workspace" <<'JAVASCRIPT'
 ObjC.import('Foundation');
@@ -47,6 +47,6 @@ function run(argv) {
 JAVASCRIPT
 pdf_before=$(/usr/bin/shasum -a 256 "$workspace"/*.pdf)
 /bin/bash "$root/convert.sh" --no-dialog -- "$workspace/긴 문서.TXT" "$workspace/문서.MD" "$workspace/별칭.MARKDOWN" > "$workspace/repeat.log"
-/usr/bin/grep -q '완료 0개 · 건너뜀 3개 · 실패 0개' "$workspace/repeat.log" || fail 'repeat did not skip existing PDFs'
+/usr/bin/grep -Eq '^(완료 0개 · 건너뜀 3개 · 실패 0개|Completed: 0 · Skipped: 3 · Failed: 0)$' "$workspace/repeat.log" || fail 'repeat did not skip existing PDFs'
 [[ $(/usr/bin/shasum -a 256 "$workspace"/*.pdf) == "$pdf_before" ]] || fail 'repeat changed PDFs'
 printf '%s\n' 'PASS: Korean multipage content, Markdown aliases and literal HTML, malformed UTF-8, original preservation, repeat safety'

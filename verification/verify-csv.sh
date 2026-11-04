@@ -26,7 +26,7 @@ status=$?
 set -e
 [[ $status == 1 ]] || fail 'malformed CSV did not fail batch'
 [[ -s "$workspace/quoted.pdf" && -s "$workspace/wide.pdf" && -s "$workspace/empty.pdf" && ! -e "$workspace/malformed.pdf" ]] || fail 'CSV outputs differ from contract'
-/usr/bin/grep -q '완료 3개 · 건너뜀 0개 · 실패 1개' "$workspace/result.log" || fail 'CSV batch summary differs'
+/usr/bin/grep -Eq '^(완료 3개 · 건너뜀 0개 · 실패 1개|Completed: 3 · Skipped: 0 · Failed: 1)$' "$workspace/result.log" || fail 'CSV batch summary differs'
 [[ $(/usr/bin/shasum -a 256 "$workspace"/*.CSV "$workspace"/*.csv) == "$before" ]] || fail 'CSV source changed'
 /usr/bin/osascript -l JavaScript - "$workspace" <<'JS'
 ObjC.import('Foundation');
@@ -49,6 +49,6 @@ function run(argv) {
 JS
 pdf_before=$(/usr/bin/shasum -a 256 "$workspace"/*.pdf)
 /bin/bash "$root/convert.sh" --no-dialog -- "$workspace/quoted.CSV" "$workspace/wide.csv" "$workspace/empty.csv" > "$workspace/repeat.log"
-/usr/bin/grep -q '완료 0개 · 건너뜀 3개 · 실패 0개' "$workspace/repeat.log" || fail 'CSV existing PDF not skipped'
+/usr/bin/grep -Eq '^(완료 0개 · 건너뜀 3개 · 실패 0개|Completed: 0 · Skipped: 3 · Failed: 0)$' "$workspace/repeat.log" || fail 'CSV existing PDF not skipped'
 [[ $(/usr/bin/shasum -a 256 "$workspace"/*.pdf) == "$pdf_before" ]] || fail 'CSV existing PDF changed'
 printf '%s\n' 'PASS: CSV quoted/multiline/Korean/CP949/wide/literal fields, malformed rejection, empty file, original preservation, repeat safety'

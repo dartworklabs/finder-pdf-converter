@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 
 REPO = Path(__file__).resolve().parents[1]
-HELPERS = ('convert.sh', 'hancom.applescript', 'word.applescript',
+HELPERS = ('locale.sh', 'preferred-language.js', 'convert.sh', 'hancom.applescript', 'word.applescript',
            'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js',
            'text.js', 'markdown.js', 'csv.js')
 
@@ -40,13 +40,29 @@ with tempfile.TemporaryDirectory(prefix='fpdf-doctor-') as temp:
     target = home / 'Library/Services/PDF로 변환.workflow'
     shutil.copytree(REPO / 'PDF로 변환.workflow', target)
     resources = target / 'Contents/Resources'
-    resources.mkdir()
+    resources.mkdir(exist_ok=True)
     for name in HELPERS:
         shutil.copy2(REPO / name, resources / name)
     output = run(0, 'matching installed workflow succeeds')
     for app in ('Hancom Office HWP', 'Microsoft Word', 'Microsoft PowerPoint', 'Microsoft Excel'):
         assert app in output, 'app not reported individually: ' + app
     run(0, 'repeated matching diagnosis remains read-only')
+    for name in ('en.lproj/ServicesMenu.strings', 'ko.lproj/ServicesMenu.strings',
+                 'en.lproj/InfoPlist.strings', 'ko.lproj/InfoPlist.strings'):
+        localized = resources / name
+        original = localized.read_bytes()
+        localized.unlink()
+        run(1, f'missing {name} rejected')
+        localized.write_text('stale translation\n')
+        run(1, f'stale {name} rejected')
+        localized.write_bytes(original)
+    locale = resources / 'ko.lproj'
+    external_locale = Path(temp) / 'outside-locale'
+    locale.rename(external_locale)
+    locale.symlink_to(external_locale, target_is_directory=True)
+    run(1, 'linked localization directory rejected')
+    locale.unlink()
+    external_locale.rename(locale)
     (resources / 'csv.js').write_text('stale helper\n')
     run(1, 'stale helper rejected')
     shutil.copy2(REPO / 'csv.js', resources / 'csv.js')

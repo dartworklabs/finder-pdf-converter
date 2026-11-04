@@ -13,6 +13,10 @@
 			<dict>
 				<key>default</key>
 				<string>PDF로 변환</string>
+				<key>en</key>
+				<string>Convert to PDF</string>
+				<key>ko</key>
+				<string>PDF로 변환</string>
 			</dict>
 			<key>NSMessage</key>
 			<string>runWorkflowAsService</string>
@@ -31,5 +35,14 @@
 	<string>com.wonjun-lab.finder-pdf-converter.quickaction</string>
 	<key>CFBundleName</key>
 	<string>PDF로 변환</string>
+	<key>CFBundleDisplayName</key>
+	<string>PDF로 변환</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ko</string>
+	</array>
 </dict>
 </plist>

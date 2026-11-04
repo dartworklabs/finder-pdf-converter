@@ -62,32 +62,49 @@
 					<string># Run the installed copy and show its summary from Finder.
 workflow="$HOME/Library/Services/PDF로 변환.workflow"
 source="$workflow/Contents/Resources"
-if [ ! -f "$source/convert.sh" ]; then
-  printf '%s\n' 'PDF 변환기를 찾을 수 없습니다. 빠른 동작을 다시 설치해 주세요.' &gt;&amp;2
-  exit 1
+# English is the fallback if the shared language resources are missing.
+fpdf_locale=en
+if [ -r "$source/locale.sh" ]; then
+  . "$source/locale.sh"
+  fpdf_locale=$(fpdf_language "$source/preferred-language.js")
+  title=$(fpdf_text title)
+  button=$(fpdf_text ok)
+else
+  title='PDF Conversion Results'
+  button='OK'
 fi
-summary=$(/bin/bash "$source/convert.sh" --no-dialog "$@" 2&gt;&amp;1)
-status=$?
+if [ ! -f "$source/convert.sh" ] || [ ! -r "$source/locale.sh" ]; then
+  if [ -r "$source/locale.sh" ]; then
+    summary=$(fpdf_text missing_converter)
+  else
+    summary='The PDF converter could not be found. Reinstall the Quick Action.'
+  fi
+  status=2
+else
+  summary=$(/bin/bash "$source/convert.sh" --no-dialog "$@" 2&gt;&amp;1)
+  status=$?
+fi
 if [ -z "$summary" ]; then
-  summary="PDF 변환기를 실행하지 못했습니다. (종료 코드: $status)"
+  summary=$(fpdf_text launch_failed "$status")
 fi
 # Keep potentially large result text out of the process argument list.
 if ! printf '%s' "$summary" | /usr/bin/osascript -l JavaScript -e '
 ObjC.import("Foundation");
 ObjC.import("AppKit");
-function run() {
+/** Display UTF-8 result data from stdin with trusted localized UI labels. */
+function run(argv) {
   const data = $.NSFileHandle.fileHandleWithStandardInput.readDataToEndOfFile;
   const message = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding));
   const app = $.NSApplication.sharedApplication;
   app.setActivationPolicy($.NSApplicationActivationPolicyRegular);
   const alert = $.NSAlert.alloc.init;
-  alert.messageText = "PDF 변환 결과";
+  alert.messageText = argv[0];
   alert.informativeText = message;
-  alert.addButtonWithTitle("확인");
+  alert.addButtonWithTitle(argv[1]);
   app.activateIgnoringOtherApps(true);
   alert.runModal;
 }
-'
+' "$title" "$button"
 then
   printf '%s\n' "$summary" &gt;&amp;2
   exit 1
