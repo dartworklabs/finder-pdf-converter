@@ -2,6 +2,8 @@
 
 Every pull request runs the listed portable and macOS checks. The macOS job requires a real GUI session and executes the existing AppKit and LaunchServices fixtures. It does not prove actual Finder, Office, printer, login, accessibility or user-account behavior. A configured check is not an enforced branch-protection rule.
 
+The Native fixtures step opts in to running the native assertion scripts in compiled, ad-hoc signed JXA applets on the disposable GitHub-hosted macOS runner. Ordinary local runs still execute those scripts through `osascript`. On timeout or interruption, the wrapper terminates only the applet's process group. Separate task groups and synthetic preference domains may persist until the hosted VM is torn down.
+
 The initial PR also runs the unchanged full managed-backend contract in a disposable GitHub-hosted macOS VM. It validates both 24-case ledgers, every case marker and core/tail phase markers. This temporary PR trigger remains until a separately reviewed change implements the approved manual-hosted policy. Backend/payload changes still require the documented local full run. A dispatch run is separately available once the workflow exists on the default branch.
 
 On cancellation or failure, the wrapper leaves its partial log on the runner and reaps its direct child. The workflow attempts to upload that log when possible; forced VM termination or runner loss can prevent retention. The backend fixtures can create separate process groups: forced cancellation does not prove those descendants were cleaned up, and they may survive until the disposable hosted VM ends. A cancelled or incomplete run is never successful evidence. Do not use the full CI wrapper as a cleanup guarantee on a shared machine.

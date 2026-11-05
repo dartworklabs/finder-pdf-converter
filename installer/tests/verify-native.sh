@@ -214,7 +214,7 @@ for (const arguments_ of [
     if (!rejected) throw Error('Invalid native process arguments were accepted');
 }
 JXA
-/usr/bin/osascript -l JavaScript "$stage/check.js"
+bash "$root/tests/run-native-applet.sh" "$stage" "$stage/check.js"
 printf '%s\n' 'installer native: protocol encodings, real owned-task inspection timeout/cancel and mutation Quit/window guards, inert preview, bounded stdout, timer-before-launch, process-only language and launch argument refusal passed'
 bash "$root/tests/verify-management-native.sh"
 bash "$root/tests/verify-login-control.sh"

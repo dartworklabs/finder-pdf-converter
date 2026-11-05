@@ -83,6 +83,8 @@ jobs:
       - name: Package boundary
         run: python3 verification/ci/check.py fast build
       - name: Native fixtures
+        env:
+          FINDER_PDF_CI_NATIVE_APPLET: '1'
         run: python3 verification/ci/check.py fast native
       - name: Tracked shell syntax
         run: python3 verification/ci/check.py shell
