@@ -3,8 +3,8 @@
 # Exit 0: installed files match; 1: missing/different files; 2: unsupported use.
 set -eu
 
-if [ "$#" -ne 0 ]; then
-  printf '%s\n' '사용법: bash ./doctor.sh' >&2
+if [ "$#" -ne 0 ] && { [ "$#" -ne 2 ] || [ "$1" != --source-root ]; }; then
+  printf '%s\n' '사용법: bash ./doctor.sh [--source-root PATH]' >&2
   exit 2
 fi
 if [ "$(/usr/bin/uname -s)" != Darwin ]; then
@@ -15,7 +15,15 @@ if [ -z "${HOME:-}" ]; then
   printf '%s\n' '확인 불가: HOME이 설정되어 있지 않습니다.' >&2
   exit 2
 fi
-root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+if [ "$#" -eq 2 ]; then
+  [ -d "$2" ] && [ ! -L "$2" ] || exit 1
+  # The trusted caller has established the exact physical owner spelling.
+  # Retain its bytes: macOS may return a decomposed spelling from getcwd.
+  root=$2
+else
+  root=$(CDPATH='' cd -P -- "$(dirname -- "$0")" && printf '%s.' "$PWD")
+  root=${root%.}
+fi
 target="$HOME/Library/Services/PDF로 변환.workflow"
 resources=(locale.sh preferred-language.js convert.sh conversion-session.sh conversion-session.js conversion-status.js hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js print-fit.sh print-fit.js print-panel.js review-model.js document-review.js)
 status=0

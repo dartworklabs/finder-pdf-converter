@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory(prefix='fpdf-doctor-') as temp:
         return output
 
     run(1, 'missing workflow reported without creating installation')
-    installed = subprocess.run(['/bin/bash', str(REPO / 'install.sh')], env={**os.environ, 'HOME': str(home)}, capture_output=True, text=True)
+    installed = subprocess.run(['/bin/bash', str(REPO / 'install.sh'), '--no-register'], env={**os.environ, 'HOME': str(home)}, capture_output=True, text=True)
     assert installed.returncode == 0, installed.stderr
     target = home / 'Library/Services/PDF로 변환.workflow'
     print_target = home / 'Library/Services/용지에 맞춰 인쇄.workflow'

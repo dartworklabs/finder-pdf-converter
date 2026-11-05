@@ -1,0 +1,48 @@
+{
+    "$schema": "https://biomejs.dev/schemas/2.6.5/schema.json",
+    "files": {
+        "includes": [
+            "model.js",
+            "ui.js",
+            "tests/verify-model.js",
+            "tests/verify-boundaries.js",
+            "tests/verify-build.js"
+        ]
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "preset": "recommended",
+            "style": {
+                "useTemplate": "off"
+            }
+        }
+    },
+    "javascript": {
+        "globals": ["$", "ObjC", "FPDFInstallerModel", "FPDF_INSTALLER_PREVIEW_ONLY"],
+        "formatter": {
+            "quoteStyle": "single",
+            "quoteProperties": "preserve"
+        }
+    },
+    "overrides": [
+        {
+            "includes": ["ui.js"],
+            "linter": {
+                "rules": {
+                    "correctness": {
+                        "noUnusedVariables": "off"
+                    },
+                    "suspicious": {
+                        "noConfusingVoidType": "off"
+                    }
+                }
+            }
+        }
+    ],
+    "formatter": {
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 100
+    }
+}

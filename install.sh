@@ -2,7 +2,35 @@
 # Install a Finder service bundle owned by this checkout; preserve name conflicts.
 set -eu
 umask 077
-root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+# Filesystem-only verification must never send registration to the real session.
+register=1
+if [ "$#" -eq 1 ] && [ "$1" = --no-register ]; then
+  register=0
+elif [ "$#" -ne 0 ]; then
+  printf '%s\n' 'Usage: bash install.sh [--no-register]' >&2
+  exit 2
+fi
+# Share an advisory lock with the managed installer. Older installers and
+# other writers may not honor it, so the managed path also rechecks content.
+physical_home=$(CDPATH='' cd -P -- "$HOME" && printf '%s.' "$PWD")
+physical_home=${physical_home%.}
+root=$(CDPATH='' cd -P -- "$(dirname -- "$0")" && printf '%s.' "$PWD")
+root=${root%.}
+managed="$physical_home/Library/Application Support/Finder PDF Converter/source"
+# A managed payload cannot be used to bypass the transaction and receipt guard.
+if { [ -e "$managed" ] && [ "$root" -ef "$managed" ]; } || [ -e "$root/.finder-pdf-receipt.json" ] || [ -L "$root/.finder-pdf-receipt.json" ]; then
+  printf '%s\n' 'Use the managed installer to update this installation.' >&2
+  exit 1
+fi
+for directory in "$physical_home/Library" "$physical_home/Library/Application Support" "$physical_home/Library/Application Support/Finder PDF Converter"; do
+  if [ ! -e "$directory" ] && [ ! -L "$directory" ]; then mkdir "$directory"; fi
+  if [ ! -d "$directory" ] || [ -L "$directory" ]; then printf '%s\n' 'Unsafe installation lock directory.' >&2; exit 1; fi
+done
+if [ "$(/usr/bin/stat -f %u "$directory")" != "$(/usr/bin/id -u)" ] || [ $((8#$(/usr/bin/stat -f %Lp "$directory") & 077)) -ne 0 ]; then
+  printf '%s\n' 'Unsafe installation lock directory permissions.' >&2; exit 1
+fi
+exec 9<"$directory"
+if ! /usr/bin/lockf -s -t 0 9; then printf '%s\n' 'Another installation is in progress.' >&2; exit 1; fi
 source="$root/PDF로 변환.workflow"
 target="$HOME/Library/Services/PDF로 변환.workflow"
 print_source="$root/용지에 맞춰 인쇄.workflow"
@@ -268,5 +296,7 @@ else
   mv "$stage/merge" "$merge_target"
   printf '%s\n' "설치했습니다: $merge_target"
 fi
-/System/Library/CoreServices/pbs -flush
-/System/Library/CoreServices/pbs -update
+if [ "$register" -eq 1 ]; then
+  /System/Library/CoreServices/pbs -flush
+  /System/Library/CoreServices/pbs -update
+fi

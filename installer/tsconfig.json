@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "allowJs": true,
+        "checkJs": true,
+        "noEmit": true,
+        "target": "ES2022",
+        "module": "commonjs",
+        "strictNullChecks": true,
+        "skipLibCheck": true,
+        "strict": true
+    },
+    "files": [
+        "native-globals.d.ts",
+        "model.js",
+        "ui.js"
+    ]
+}

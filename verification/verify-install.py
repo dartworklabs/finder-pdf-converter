@@ -35,7 +35,8 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
 
     def run(home):
         """Run the real installer with HOME isolated from the user's services."""
-        return subprocess.run(['/bin/bash', str(source / 'install.sh')], env={**os.environ, 'HOME': str(home)}, capture_output=True, text=True)
+        home.mkdir(parents=True, exist_ok=True)
+        return subprocess.run(['/bin/bash', str(source / 'install.sh'), '--no-register'], env={**os.environ, 'HOME': str(home)}, capture_output=True, text=True)
 
     home = base / 'fresh-home'
     result = run(home)

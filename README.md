@@ -19,13 +19,41 @@ Tested on macOS 26.6.2. This is the tested version, not a stated minimum require
 
 Hancom HWP, Word, PowerPoint, and Excel must be installed as Mac apps; their web versions do not work with this tool. You only need the app for the file type you want to convert. Open each Office app once and finish its initial setup before using it here. File extensions are case-insensitive.
 
-The Quick Action menus are **Convert to PDF**, **Print to Fit**, and **Merge PDFs** in English Finder, and **PDF로 변환**, **용지에 맞춰 인쇄**, and **PDF 합치기** in Korean Finder. Conversion results follow Finder’s preferred-language list, or the macOS list if Finder has no app-specific setting: they use the first supported language (English or Korean), and English if neither appears. For other Finder languages, the native menus can fall back to the registered Korean defaults **PDF로 변환**, **용지에 맞춰 인쇄**, and **PDF 합치기** even when results are in English; English menu titles are not guaranteed. Region settings and Terminal’s `LANG` do not select the result language. Installer and installation-check (`doctor.sh`) messages remain in Korean.
+The Quick Action menus are **Convert to PDF**, **Print to Fit**, and **Merge PDFs** in English Finder, and **PDF로 변환**, **용지에 맞춰 인쇄**, and **PDF 합치기** in Korean Finder. Conversion results follow Finder’s preferred-language list, or the macOS list if Finder has no app-specific setting: they use the first supported language (English or Korean), and English if neither appears. For other Finder languages, the native menus can fall back to the registered Korean defaults **PDF로 변환**, **용지에 맞춰 인쇄**, and **PDF 합치기** even when results are in English; English menu titles are not guaranteed. Region settings and Terminal’s `LANG` do not select the result language. The native installer uses the first supported Mac language (English or Korean), with English fallback. The advanced checkout installer (`install.sh`) and installation-check (`doctor.sh`) messages remain in Korean.
 
 <a id="설치"></a>
 
 ## Install
 
-### 1. Download the files
+### Graphical installer — developer preview
+
+A native **Finder PDF Converter Installer.app** is available as a locally built developer preview. A signed, notarized public download has **not** been published. This preview is ad-hoc signed and has not been notarized by Apple; this local ad-hoc build requires no Apple Developer account or paid membership. For build instructions, see [Native installer](installer/README.md).
+
+If you have been provided this developer app:
+
+1. Extract its ZIP if needed, then open **Finder PDF Converter Installer.app**.
+2. Review the installation state, then choose **Install** or **Update**. This installs all three actions for your Mac account without Terminal or an administrator password.
+3. After **Installation complete**, continue with [Enable it in Finder](#3-enable-it-in-finder) if needed and [Try a single PNG](#4-try-a-single-png). Completion confirms installation, not app licensing, permissions, or successful conversion.
+
+If the app says Finder menu registration needs checking, the installation files are already verified. Open a new Finder window, enable missing Quick Actions, then try the PNG check.
+
+The app keeps its managed source in the real directory `~/Library/Application Support/Finder PDF Converter/source`. After successful installation, you can remove the downloaded app or extracted download folder; later updates can come from a new download location. An existing checkout installation is adopted only when all three actions, ownership markers, source files, inventories, and signatures can be verified. Keep the old source until migration succeeds. Missing or moved source, modified files, and foreign items stop installation for review; do not remove an uncertain item just to bypass the conflict.
+
+If an interrupted install needs recovery, use **Recover** when offered and keep the existing files and backups. If recovery is blocked, retain them and share the diagnostic code from **Technical details** with the project maintainer. The app does not grant permissions, launch document apps, or submit print jobs. Permission guidance applies when you later run a conversion yourself.
+
+For developers building from this repository, use a new absolute output directory:
+
+```sh
+bash installer/build-installer.sh --output-dir "$HOME/scratch/finder-pdf-installer-build"
+```
+
+This produces the local `.app` and ZIP. It does not publish a release or change macOS security settings. An inert preview-only build for reviewing screens is documented in [Native installer](installer/README.md); it cannot install.
+
+### Advanced: checkout CLI
+
+The following route installs directly from a retained source folder. Its exact-source-path ownership rule is separate from the graphical installer's managed source.
+
+#### 1. Download the files
 
 You do not need Git. On the [GitHub repository page](https://github.com/dartworklabs/finder-pdf-converter), choose the green **Code → Download ZIP** button. Double-click the downloaded ZIP to extract it, then move the extracted folder somewhere you plan to keep it. Check that it contains `install.sh` and `README.md`.
 
@@ -35,7 +63,7 @@ If you already use Git, you can clone the repository instead:
 git clone https://github.com/dartworklabs/finder-pdf-converter.git
 ```
 
-### 2. Run the installer
+#### 2. Run the installer
 
 1. Open **Terminal** on your Mac. You can find it by searching for `Terminal` in Spotlight.
 2. Type `cd` followed by **one space**. Drag the actual folder containing `install.sh` from Finder into the Terminal window, then press Return. This fills in the folder path for you.
@@ -47,7 +75,7 @@ bash ./install.sh
 
 When you see `설치했습니다:` (“Installed:”) followed by a path, installation is complete. No administrator access or `sudo` is required.
 
-The installer copies three Quick Actions to `~/Library/Services/PDF로 변환.workflow`, `~/Library/Services/용지에 맞춰 인쇄.workflow`, and `~/Library/Services/PDF 합치기.workflow`. It compiles the review and print applications with macOS’s built-in tools before updating any installed files. Neither Xcode nor an additional runtime is needed. The shared executables are kept in the conversion bundle, so keep that bundle installed when using Print to Fit or Merge PDFs. It will not overwrite an unrelated item with any of these names. It **only updates an installation made from the same source folder at the same absolute path**. It also refuses to update an installation whose folder or executables have been replaced with symbolic links.
+The checkout CLI installer copies three Quick Actions to `~/Library/Services/PDF로 변환.workflow`, `~/Library/Services/용지에 맞춰 인쇄.workflow`, and `~/Library/Services/PDF 합치기.workflow`. It compiles the review and print applications with macOS’s built-in tools before updating any installed files. Neither Xcode nor an additional runtime is needed. The shared executables are kept in the conversion bundle, so keep that bundle installed when using Print to Fit or Merge PDFs. It will not overwrite an unrelated item with any of these names. It **only updates an installation made from the same source folder at the same absolute path**. It also refuses to update an installation whose folder or executables have been replaced with symbolic links.
 
 ### 3. Enable it in Finder
 
@@ -69,7 +97,13 @@ The installed bundles keep the names `PDF로 변환.workflow`, `용지에 맞춰
 
 ## Update
 
-**Keep the original source folder at the same absolute path.** If you rename or move it, the installer treats it as a different source and refuses to update the existing installation.
+### Graphical installer
+
+Open a newer developer installer app and choose **Update** when offered. Its download location can differ from the previous one; the verified managed source stays at the stable path above. If the same version is already installed, the app says so. Repeat the PNG check after an update. Unverifiable ownership or contents stop the update, and an interrupted installation must be recovered before another update proceeds.
+
+### Advanced: checkout CLI
+
+**For this CLI route, keep the original source folder at the same absolute path.** If you rename or move it, the installer treats it as a different source and refuses to update the existing installation.
 
 - **If you downloaded a ZIP:** Extract the new ZIP somewhere else, then copy its contents into the folder you originally installed from. A folder with the same name in a different parent folder is still a different path. Do not run the installer directly from a newly downloaded folder with a suffix such as `(1)` or `-main`. If you keep personal files in the original folder, review what will be replaced before copying.
 - **If you used Git:** Run `git pull --ff-only` in the original folder. If it fails, review and resolve the changes instead of forcing an overwrite.
@@ -84,7 +118,9 @@ The same installer updates all three actions and adds Print to Fit and Merge PDF
 
 ## Check the installation
 
-In Terminal, open the folder containing `install.sh` and run:
+For graphical installations, reopen the installer for read-only inspection and use **Technical details** for diagnostic codes and optional-app presence. This does not test conversion.
+
+For an advanced checkout CLI installation, open the folder containing `install.sh` in Terminal and run:
 
 ```sh
 bash ./doctor.sh
@@ -101,7 +137,7 @@ The check looks for Hancom HWP, Word, PowerPoint, and Excel under their standard
 
 To remove only Print to Fit or Merge PDFs, remove its corresponding workflow bundle. Keep `PDF로 변환.workflow` because it holds the shared executables. To hide a menu without removing it, turn it off in Finder’s Quick Actions customization.
 
-This removes the Quick Actions only. Your source files and converted PDFs remain in place. No administrator access or `sudo` is required.
+This removes the Quick Actions only. A graphical installation’s managed source and any recovery backups remain in `~/Library/Application Support/Finder PDF Converter`; retain them if recovery is pending. Your source documents and converted PDFs remain in place. No administrator access or `sudo` is required.
 
 ## Print to Fit
 
