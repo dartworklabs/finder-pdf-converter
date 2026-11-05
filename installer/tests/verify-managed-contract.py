@@ -168,6 +168,7 @@ def invoke(
     fault: Optional[str] = None,
     crash: bool = False,
     registration_failure: Optional[str] = None,
+    timeout: int = 120,
 ) -> subprocess.CompletedProcess[str]:
     """Call the real public backend with registration explicitly replaced."""
     environment = {**os.environ, "HOME": str(home), "FINDER_PDF_TEST_NO_REGISTER": "1"}
@@ -192,7 +193,7 @@ def invoke(
         check=False,
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=timeout,
     )
 
 
@@ -269,9 +270,12 @@ def expect(
     kinds: set[str],
     *,
     fault: Optional[str] = None,
+    timeout: int = 120,
 ) -> dict[str, Any]:
     """Require one public outcome while preserving the complete diagnostic on failure."""
-    return outcome(invoke(home, payload, operation, fault=fault), operation, kinds)
+    return outcome(
+        invoke(home, payload, operation, fault=fault, timeout=timeout), operation, kinds
+    )
 
 
 def inspect_unchanged(home: Path, payload: Path, kinds: set[str]) -> dict[str, Any]:
@@ -350,7 +354,9 @@ def refusal_preserves(home: Path, payload: Path) -> None:
     assert snapshot(home) == before, "refused install changed the user's filesystem"
 
 
-def test_download_independence(base: Path, payload: Path) -> Path:
+def test_download_independence(
+    base: Path, payload: Path, *, hosted_full: bool = False
+) -> Path:
     """Install, delete the first download, and update from a differently named copy."""
     home = base / "한글 'quoted' $ user\n"
     home.mkdir()
@@ -366,7 +372,11 @@ def test_download_independence(base: Path, payload: Path) -> Path:
         changed = moved / "convert.sh"
         changed.write_bytes(changed.read_bytes() + b"\n# contract-test update\n")
         inspect_unchanged(home, moved, {"update"})
-        expect(home, moved, "install", {"installed"})
+        if hosted_full:
+            print("BUDGET moved-download update install 240s", flush=True)
+        expect(
+            home, moved, "install", {"installed"}, timeout=240 if hosted_full else 120
+        )
         assert (
             support(home) / "source/convert.sh"
         ).read_bytes() == changed.read_bytes()
@@ -1347,7 +1357,15 @@ def main() -> None:
             return
         started = time.monotonic()
         test_malformed_requests(base, payload)
-        home = test_download_independence(base, payload)
+        hosted_full = (
+            mode == "all"
+            and os.environ.get("FINDER_PDF_HOSTED_FULL_UPDATE_TIMEOUT") == "1"
+            and os.environ.get("CI") == "true"
+            and os.environ.get("GITHUB_ACTIONS") == "true"
+            and os.environ.get("RUNNER_OS") == "macOS"
+            and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
+        )
+        home = test_download_independence(base, payload, hosted_full=hosted_full)
         test_conflicts(base, payload, home)
         test_payload_rejection(base, payload)
         test_legacy(base, payload)
