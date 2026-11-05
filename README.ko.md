@@ -220,9 +220,10 @@ python3 verification/verify-preparation-entry.py
 python3 verification/verify-print-host-entry.py
 python3 verification/verify-print-panel.py
 python3 verification/verify-print-capture.py
+python3 verification/test_print_preferences.py
 ```
 
-위 자동 검증은 일회용 파일과 시험용 도우미를 사용하며 물리 프린터에 작업을 보내지 않습니다. Python 3와 Node.js는 검증할 때만 필요합니다. 실제 Finder에서는 영어·한국어 모두 인쇄와 취소를 확인했습니다. 시험용 가상 프린터로 받은 두 작업의 페이지 순서·축소 배율·모서리 표시도 확인했으며, 종이 출력은 검증하지 않았습니다. [검증 기록](verification/PROGRESS.md#dedicated-native-print-panel-and-captured-output)에 가상 프린터 시험 절차와 받은 PDF를 검사하는 명령이 있습니다. 이 PDF 검사 도구에만 시험용 PyMuPDF가 추가로 필요합니다.
+위 자동 검증은 일회용 파일과 시험용 도우미를 사용하며 물리 프린터에 작업을 보내지 않습니다. Python 3와 Node.js는 검증할 때만 필요합니다. 실제 Finder에서는 영어·한국어 모두 인쇄와 취소를 확인했습니다. 시험용 가상 프린터로 받은 두 작업의 페이지 순서·축소 배율·모서리 표시도 확인했으며, 종이 출력은 검증하지 않았습니다. 가상 프린터 검증 도구는 큐를 만들기 전에 현재 인쇄 설정을 비공개로 백업하고, 작업별 체크포인트로 확인한 시험 변경만 복원합니다. 인쇄가 끝날 때마다 체크포인트를 기록해야 하며, 충돌하거나 출처를 확인할 수 없는 변경은 그대로 두고 보고합니다. [검증 기록](verification/PROGRESS.md#dedicated-native-print-panel-and-captured-output)에 가상 프린터 시험 절차와 받은 PDF를 검사하는 명령이 있습니다. 이 PDF 검사 도구에만 시험용 PyMuPDF가 추가로 필요합니다.
 
 ## 라이선스
 

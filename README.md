@@ -236,9 +236,10 @@ python3 verification/verify-preparation-entry.py
 python3 verification/verify-print-host-entry.py
 python3 verification/verify-print-panel.py
 python3 verification/verify-print-capture.py
+python3 verification/test_print_preferences.py
 ```
 
-These automated checks use disposable files and owned adapters; they do not submit physical print jobs. Python 3 and Node.js are required for verification only. Actual Finder Print and Cancel passed in English and Korean; two jobs were captured by an owned virtual printer, and their page order, shrink-only fit and corner marks were verified. Physical paper output remains unverified. The [verification record](verification/PROGRESS.md#dedicated-native-print-panel-and-captured-output) includes the capture procedure and offline verifier; only that offline PDF verifier additionally requires test-only PyMuPDF.
+These automated checks use disposable files and owned adapters; they do not submit physical print jobs. Python 3 and Node.js are required for verification only. Actual Finder Print and Cancel passed in English and Korean; two jobs were captured by an owned virtual printer, and their page order, shrink-only fit and corner marks were verified. The capture harness now privately backs up current print preferences before queue creation and restores only checkpointed test changes; every successful native job needs its own checkpoint. Conflicting or uncheckpointed changes are retained and reported. Physical paper output remains unverified. The [verification record](verification/PROGRESS.md#dedicated-native-print-panel-and-captured-output) includes the capture procedure and offline verifier; only that offline PDF verifier additionally requires test-only PyMuPDF.
 
 ## License
 
