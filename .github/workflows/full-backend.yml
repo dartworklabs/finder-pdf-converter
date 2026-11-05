@@ -1,0 +1,45 @@
+name: Managed backend full contract
+"on":
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -eo pipefail {0}'
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('{0}-pr-{1}', github.workflow, github.event.pull_request.number) || format('{0}-run-{1}', github.workflow, github.run_id) }}
+  cancel-in-progress: true
+jobs:
+  full:
+    runs-on: macos-15
+    timeout-minutes: 200
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26.5.0'
+      - name: Environment and source
+        run: |
+          git rev-parse HEAD HEAD^{tree}
+          sw_vers
+          uname -m
+          test "$(uname -m)" = arm64
+          printf 'Image: %s %s\n' "$ImageOS" "$ImageVersion"
+          xcodebuild -version
+          xcrun --show-sdk-version
+          clang --version
+          node --version
+          /usr/bin/python3 --version
+      - name: Full contract and ledger
+        run: python3 verification/ci/check.py full "$RUNNER_TEMP/full-backend.log"
+      - name: Preserve synthetic fixture evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: full-backend-log
+          path: ${{ runner.temp }}/full-backend.log
+          if-no-files-found: error
+          retention-days: 7
