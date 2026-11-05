@@ -11,11 +11,11 @@ mkdir "$output"
 output=$(CDPATH='' cd -- "$output" && pwd -P)
 for mode in inspect inspect-nested inspect-failure install; do
   bash "$root/installer/build-installer.sh" --output-dir "$output/$mode" > "$output/$mode-build.log" 2>&1
-  original="$output/$mode/Finder PDF Converter Installer.app"
+  original="$output/$mode/Finder PDF Converter.app"
   name="Finder PDF UI $mode Test"
   app="$output/$mode/$name.app"
   mv "$original" "$app"
-  rm -- "$output/$mode/Finder PDF Converter Installer.zip"
+  rm -- "$output/$mode/Finder PDF Converter.zip"
   node - "$mode" "$app" "$output/install-release" "$output/$mode-processes.json" "$root" <<'JS'
 /** Replace only the copied app's public adapter with a fixed harmless UI fixture. */
 const fs = require('node:fs');
@@ -74,15 +74,17 @@ for (const locale of ['en','ko']) {
     strings.developer = locale==='ko'?'UI 조작 시험 전용 · 설치 파일과 설정을 바꾸지 않습니다':'UI transport fixture · no installation or settings changes';
     fs.writeFileSync(file,JSON.stringify(strings,null,2)+'\n');
 }
-if (mode === 'inspect-failure') {
-    const source='var FPDF_INSTALLER_PREVIEW_ONLY=false;\n'+fs.readFileSync(path.join(sourceRoot,'installer/model.js'),'utf8')+'\n'+fs.readFileSync(path.join(sourceRoot,'installer/ui.js'),'utf8')+'\nconst actualQuery=installerProcessSnapshot;let failedQuery=false;installerProcessSnapshot=function(pid,budget){if(!failedQuery){failedQuery=true;return {kind:"unavailable"};}return actualQuery(pid,budget);};\n';
-    fs.writeFileSync(path.join(path.dirname(path.dirname(app)),mode+'-private-ui.js'),source);
-}
+// These fixed event-transport fixtures must never acquire preference or login
+// authority, even if someone later copies one into an Applications directory.
+let nativeSource='var FPDF_INSTALLER_PREVIEW_ONLY=false;\n'+fs.readFileSync(path.join(sourceRoot,'installer/model.js'),'utf8')+'\n'+fs.readFileSync(path.join(sourceRoot,'installer/ui.js'),'utf8');
+nativeSource+='\ninstallerLoadMenuPreference=function(){return {kind:"missing",enabled:false};};installerSaveMenuPreference=function(){return false;};installerPreferenceError=function(){};installerLoginService=function(){throw Error("Private transport fixture has no login authority");};installerLoginEligible=function(){return false;};\n';
+if(mode==='inspect-failure')nativeSource+='\nconst actualQuery=installerProcessSnapshot;let failedQuery=false;installerProcessSnapshot=function(pid,budget){if(!failedQuery){failedQuery=true;return {kind:"unavailable"};}return actualQuery(pid,budget);};\n';
+fs.writeFileSync(path.join(path.dirname(path.dirname(app)),mode+'-private-ui.js'),nativeSource);
+fs.rmSync(path.join(app,'Contents/MacOS/fpdf-login-helper'));
+fs.rmSync(path.join(app,'Contents/Library/LaunchAgents/com.wonjun-lab.finder-pdf-converter.login.plist'));
 fs.writeFileSync(path.join(resources,'developer-status.txt'),'PRIVATE UI TRANSPORT FIXTURE. Fixed harmless backend; never use as an installer.\n');
 JS
-  if [ "$mode" = inspect-failure ]; then
-    /usr/bin/osacompile -l JavaScript -o "$app/Contents/Resources/Scripts/main.scpt" "$output/$mode-private-ui.js"
-  fi
+  /usr/bin/osacompile -l JavaScript -o "$app/Contents/Resources/Scripts/main.scpt" "$output/$mode-private-ui.js"
   payload="$app/Contents/Resources/payload"
   # Preserve the exact bounded inventory member set while updating its copied adapter hash.
   (cd "$payload" && /usr/bin/shasum -a 256 installer/managed-install.sh) > "$output/$mode-adapter.sha256"

@@ -5,6 +5,7 @@
             "model.js",
             "ui.js",
             "tests/verify-model.js",
+            "tests/verify-management-model.js",
             "tests/verify-boundaries.js",
             "tests/verify-build.js"
         ]

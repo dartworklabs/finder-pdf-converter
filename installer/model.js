@@ -356,7 +356,37 @@ const FPDFInstallerModel = (() => {
             processes: owned.sort((a, b) => b.depth - a.depth || b.pid - a.pid),
         };
     }
+    /** Parse the app-owned preference without coercing foreign values. Missing or
+     * malformed input remains off; callers may display an error and must not overwrite it.
+     * @param {unknown} value @returns {{kind:'valid',enabled:boolean}|{kind:'invalid',enabled:false}} */
+    function parseMenuPreference(value) {
+        if (typeof value === 'boolean') return { kind: 'valid', enabled: value };
+        return { kind: 'invalid', enabled: false };
+    }
+    /** Map the actual ServiceManagement status, never a requested setting, to presentation.
+     * @param {unknown} status @returns {'enabled'|'disabled'|'approval-required'|'unavailable'} */
+    function loginPresentation(status) {
+        if (status === 1) return 'enabled';
+        if (status === 0) return 'disabled';
+        if (status === 2) return 'approval-required';
+        return 'unavailable';
+    }
+    /** Decide window and application lifecycle effects after any inspect cancellation.
+     * @param {InstallerOperation|null} operation @param {boolean} menuEnabled
+     * @param {'open'|'close'|'quit'|'background'} intent
+     * @returns {'show'|'retain'|'defer'|'hide'|'exit'|'background'} */
+    function managerAction(operation, menuEnabled, intent) {
+        if (intent === 'open') return operation ? 'retain' : 'show';
+        if (intent === 'background') return operation ? 'retain' : menuEnabled ? 'background' : 'exit';
+        if (operation === 'install' || operation === 'recover') return 'defer';
+        if (operation === 'inspect') return 'defer';
+        if (intent === 'quit') return 'exit';
+        return menuEnabled ? 'hide' : 'exit';
+    }
     return {
+        parseMenuPreference: parseMenuPreference,
+        loginPresentation: loginPresentation,
+        managerAction: managerAction,
         inspectionProcesses: inspectionProcesses,
         inspectionExpired: inspectionExpired,
         parseReply: parseReply,

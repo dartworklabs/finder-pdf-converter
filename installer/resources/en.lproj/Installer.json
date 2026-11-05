@@ -1,5 +1,5 @@
 {
-  "window": "Finder PDF Converter Installer",
+  "window": "Finder PDF Converter",
   "product": "Finder PDF Converter",
   "developer": "Developer preview · Not notarized by Apple",
   "preview": "Preview only · installation is disabled",
@@ -59,5 +59,18 @@
   "registrationFinderStep": "1. Open a new Finder window.",
   "registrationEnableStep": "2. If the actions are missing, enable them in Quick Actions settings.",
   "registrationPNGStep": "3. Try a PNG through Quick Actions → Convert to PDF.",
-  "inspectCleanupBody": "The check could not be safely stopped yet and is still being tracked. Try Close again, or let the check finish. Installed items were not changed."
+  "inspectCleanupBody": "The check could not be safely stopped yet and is still being tracked. Try Close again, or let the check finish. Installed items were not changed.",
+  "menuToggle": "Show icon in the menu bar",
+  "openManager": "Open Finder PDF Converter",
+  "preferenceErrorTitle": "Menu setting could not be changed",
+  "preferenceErrorBody": "The menu setting could not be read, saved, or displayed. Check the setting again before relying on it.",
+  "loginToggle": "Open at login",
+  "loginMove": "Move this app to Applications before enabling login launch.",
+  "loginEnabled": "Enabled in macOS.",
+  "loginDisabled": "Off.",
+  "loginApproval": "Requires approval in macOS Login Items.",
+  "loginUnavailable": "Login launch is unavailable or its status could not be read.",
+  "loginErrorTitle": "Login setting could not be changed",
+  "loginErrorBody": "macOS did not confirm the requested change. Check the status shown here or in Login Items.",
+  "loginNotRegistered": "Login launch has not been set up yet."
 }

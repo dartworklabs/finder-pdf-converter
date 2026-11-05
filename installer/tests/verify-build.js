@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const source = path.resolve(__dirname, '..');
 const fixture = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'fpdf-build-check-')));
@@ -23,7 +24,7 @@ function build(output, preview = true) {
     );
 }
 try {
-    for (const name of ['build-installer.sh', 'model.js', 'ui.js'])
+    for (const name of ['build-installer.sh', 'model.js', 'ui.js', 'login-agent.plist', 'login-helper.m'])
         fs.copyFileSync(path.join(source, name), path.join(installer, name));
     for (const language of ['en', 'ko']) {
         const directory = path.join(installer, 'resources', language + '.lproj');
@@ -98,6 +99,126 @@ try {
         'preservation oracle must reject the mutation',
     );
     fs.writeFileSync(builder, original);
+    // The retained manager is a real renamed signed package, independent of the
+    // tiny hostile-boundary fixture above. Build it without launching any app.
+    const retainedOutput = path.join(fixture, 'retained-manager');
+    const retained = spawnSync('/bin/bash', [path.join(source, 'build-installer.sh'),
+        '--output-dir', retainedOutput], { cwd: path.dirname(source), encoding: 'utf8' });
+    assert.equal(retained.status, 0, retained.stderr);
+    const manager = path.join(retainedOutput, 'Finder PDF Converter.app');
+    assert.ok(fs.existsSync(manager), 'retained manager must use its product name');
+    assert.ok(fs.existsSync(path.join(retainedOutput, 'Finder PDF Converter.zip')));
+    const previewIdentifier = spawnSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIdentifier',
+        path.join(app, 'Contents/Info.plist')], { encoding: 'utf8' }).stdout.trim();
+    const managerIdentifier = spawnSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIdentifier',
+        path.join(manager, 'Contents/Info.plist')], { encoding: 'utf8' }).stdout.trim();
+    assert.notEqual(previewIdentifier, managerIdentifier,
+        'inert preview must never satisfy the login helper’s manager identity lookup');
+    assert.equal(managerIdentifier, 'com.wonjun-lab.finder-pdf-converter.installer');
+    assert.equal(previewIdentifier, 'com.wonjun-lab.finder-pdf-converter.installer.preview');
+    assert.equal(fs.existsSync(path.join(app, 'Contents/Library/LaunchAgents')), false,
+        'inert preview must not contain login registration authority');
+    assert.equal(fs.existsSync(path.join(app, 'Contents/MacOS/fpdf-login-helper')), false,
+        'inert preview must not contain the login launcher');
+    const agent = path.join(manager, 'Contents/Library/LaunchAgents/com.wonjun-lab.finder-pdf-converter.login.plist');
+    assert.deepEqual(fs.readFileSync(agent), fs.readFileSync(path.join(source, 'login-agent.plist')));
+    const nativeHelper = path.join(manager, 'Contents/MacOS/fpdf-login-helper');
+    const helperFormat = spawnSync('/usr/bin/file', ['-b', nativeHelper], { encoding: 'utf8' });
+    assert.equal(helperFormat.status, 0, helperFormat.stderr);
+    assert.match(helperFormat.stdout, /Mach-O universal binary/,
+        'login bootstrap must be a native executable rather than an interpreted script');
+    const helperArchitectures = spawnSync('/usr/bin/xcrun', ['lipo', '-archs', nativeHelper],
+        { encoding: 'utf8' });
+    assert.equal(helperArchitectures.status, 0, helperArchitectures.stderr);
+    assert.deepEqual(helperArchitectures.stdout.trim().split(/\s+/).sort(), ['arm64', 'x86_64'],
+        'local package must include both declared helper architectures');
+    assert.equal(spawnSync('/usr/bin/codesign', ['--verify', '--strict', nativeHelper]).status, 0,
+        'native login helper must have its own valid signature');
+    assert.ok(fs.statSync(nativeHelper).isFile() && (fs.statSync(nativeHelper).mode & 0o111) !== 0,
+        'launch-agent target must be a regular executable');
+    const bundleProgram = spawnSync('/usr/libexec/PlistBuddy', ['-c', 'Print :BundleProgram', agent],
+        { encoding: 'utf8' });
+    assert.equal(bundleProgram.status, 0, bundleProgram.stderr);
+    assert.equal(path.resolve(manager, bundleProgram.stdout.trim()), nativeHelper,
+        'agent BundleProgram must resolve to the packaged native helper');
+    // An actual native execution outside an app has no launch authority. An
+    // existing manager may cause its early warm exit; otherwise it rejects the
+    // containing path. Neither outcome may emit logs or create owned files.
+    const readOnlyDirectory = path.join(fixture, 'readonly-helper');
+    fs.mkdirSync(readOnlyDirectory);
+    const misplacedHelper = path.join(readOnlyDirectory, 'fpdf-login-helper');
+    fs.copyFileSync(nativeHelper, misplacedHelper);
+    const readOnlyFiles = fs.readdirSync(readOnlyDirectory);
+    const readOnlyHelper = spawnSync(misplacedHelper, [], {
+        cwd: readOnlyDirectory, env: { PATH: '/usr/bin:/bin', HOME: readOnlyDirectory },
+        encoding: 'utf8', timeout: 5000,
+    });
+    assert.equal(readOnlyHelper.error, undefined, 'native helper must finish its bounded read-only check');
+    assert.ok([0, 4].includes(readOnlyHelper.status), 'helper must exit warm or reject non-app placement');
+    assert.equal(readOnlyHelper.stdout, '');
+    assert.equal(readOnlyHelper.stderr, '');
+    assert.deepEqual(fs.readdirSync(readOnlyDirectory), readOnlyFiles,
+        'read-only native helper must not create file logs');
+    assert.equal(spawnSync('/usr/bin/codesign', ['--verify', '--strict', manager]).status, 0);
+    const resources = path.join(manager, 'Contents/Resources');
+    const manifest = fs.readFileSync(path.join(resources, 'payload.sha256'), 'utf8').trim().split('\n');
+    assert.equal(manifest.length, 37, 'outer manager packaging must retain the bounded payload');
+    assert.equal(new Set(manifest.map((line) => line.slice(66))).size, 37,
+        'payload inventory may not duplicate a member while omitting another');
+    for (const line of manifest) {
+        assert.match(line, /^[a-f0-9]{64} {2}[^\n]+$/);
+        const relative = line.slice(66);
+        assert.ok(!path.isAbsolute(relative) && !relative.split('/').includes('..'));
+        const copied = fs.readFileSync(path.join(resources, 'payload', relative));
+        assert.deepEqual(copied, fs.readFileSync(path.join(source, '..', relative)),
+            'retained manager payload must exactly match source: ' + relative);
+        assert.equal(crypto.createHash('sha256').update(copied).digest('hex'),
+            line.slice(0, 64));
+        const fixtureMember = path.join(project, relative);
+        fs.mkdirSync(path.dirname(fixtureMember), { recursive: true });
+        fs.copyFileSync(path.join(source, '..', relative), fixtureMember);
+    }
+    // Complete this same source fixture once so rejection cannot accidentally
+    // pass because some unrelated payload input is absent.
+    const sourceControl = build(path.join(fixture, 'complete-source-control'), false);
+    assert.equal(sourceControl.status, 0, sourceControl.stderr);
+    for (const member of ['login-helper.m', 'login-agent.plist']) {
+        const memberPath = path.join(installer, member);
+        const memberBytes = fs.readFileSync(memberPath);
+        const external = path.join(fixture, 'external-' + member);
+        fs.writeFileSync(external, memberBytes);
+        for (const alteration of ['symlink', 'hardlink', 'oversize']) {
+            const caseOutput = path.join(fixture, member + '-' + alteration);
+            fs.mkdirSync(caseOutput);
+            const outputSentinel = path.join(caseOutput, 'preserve-output');
+            fs.writeFileSync(outputSentinel, 'existing unrelated output');
+            fs.unlinkSync(memberPath);
+            if (alteration === 'symlink') fs.symlinkSync(external, memberPath);
+            else if (alteration === 'hardlink') fs.linkSync(external, memberPath);
+            else fs.writeFileSync(memberPath, Buffer.concat([
+                memberBytes, Buffer.alloc(2097153 - memberBytes.length, 0x20),
+            ]));
+            const externalBefore = fs.statSync(external);
+            try {
+                const rejectedAsset = build(caseOutput, false);
+                assert.deepEqual(fs.readFileSync(external), memberBytes,
+                    'asset rejection must preserve the external target: ' + member + '/' + alteration);
+                assert.equal(fs.statSync(external).mode, externalBefore.mode,
+                    'asset rejection must preserve external permissions');
+                assert.equal(fs.statSync(external).nlink, externalBefore.nlink,
+                    'asset rejection must preserve external hard links');
+                assert.notEqual(rejectedAsset.status, 0,
+                    'build must reject ' + alteration + ' login asset: ' + member);
+                assert.deepEqual(fs.readdirSync(caseOutput), ['preserve-output'],
+                    'rejected login asset must publish no app or archive');
+                assert.equal(fs.readFileSync(outputSentinel, 'utf8'), 'existing unrelated output');
+            } finally {
+                fs.rmSync(memberPath, { force: true });
+                fs.writeFileSync(memberPath, memberBytes);
+                fs.rmSync(caseOutput, { recursive: true, force: true });
+            }
+        }
+    }
     console.log(
         'installer build: real preview/signature, existing output, relative/redirected paths, link preservation and boundary mutation passed',
     );

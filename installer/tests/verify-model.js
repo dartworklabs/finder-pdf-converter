@@ -236,3 +236,4 @@ for (let count = 1; count < 200; count += 7) {
 console.log(
     'installer model: protocol variants, generated malformed replies, localization and refusal mutation passed',
 );
+require('./verify-management-model.js');

@@ -35,9 +35,15 @@ function installerStrings(language) {
 function installerOptions(arguments_) {
     /** @type {Record<string,string|null>} */
     const options = { preview: null, locale: null, appearance: null };
+    let background = false;
     for (let i = 0; i < arguments_.length; i++) {
         const name = String(arguments_[i]);
         if (name.indexOf('-psn_') === 0) continue;
+        if (name === '--background') {
+            if (background) throw Error('Repeated background argument');
+            background = true;
+            continue;
+        }
         if (
             ['--preview', '--locale', '--appearance'].indexOf(name) < 0 ||
             i + 1 >= arguments_.length
@@ -47,6 +53,8 @@ function installerOptions(arguments_) {
         if (options[key] !== null) throw Error('Repeated launch argument');
         options[key] = String(arguments_[++i]);
     }
+    if (background && (options.preview !== null || options.locale !== null || options.appearance !== null))
+        throw Error('Background cannot use preview overrides');
     if (options.preview === null && (options.locale !== null || options.appearance !== null))
         throw Error('Presentation overrides require preview');
     if (
@@ -71,13 +79,13 @@ function installerOptions(arguments_) {
         throw Error('Invalid locale');
     if (options.appearance !== null && ['light', 'dark'].indexOf(options.appearance) < 0)
         throw Error('Invalid appearance');
-    return options;
+    return { preview: options.preview, locale: options.locale, appearance: options.appearance, background: background };
 }
 
 /** Accept only one leading Cocoa process-language pair, then parse app options.
  * These arguments affect this process only; no preferences are written.
  * @param {string[]} arguments_
- * @returns {{preview:string|null,locale:string|null,appearance:string|null,nativeLanguage:'en'|'ko'|null}}
+ * @returns {{preview:string|null,locale:string|null,appearance:string|null,background:boolean,nativeLanguage:'en'|'ko'|null}}
  */
 function installerLaunchOptions(arguments_) {
     let custom = arguments_.slice();
@@ -96,6 +104,7 @@ function installerLaunchOptions(arguments_) {
         locale: parsed.locale,
         appearance: parsed.appearance,
         nativeLanguage: nativeLanguage,
+        background: parsed.background,
     };
 }
 
@@ -598,6 +607,210 @@ function installerStart(operation) {
     }
 }
 
+/** Return this process's defaults writer; reads select the bundle domain explicitly. @returns {any} */
+function installerPreferences() {
+    return $.NSUserDefaults.standardUserDefaults;
+}
+
+/** Identify only this manager's bundle domain; merged defaults are never authoritative. @returns {string} */
+function installerPreferenceDomain() {
+    const identifier = $.NSBundle.mainBundle.bundleIdentifier;
+    if (!identifier || identifier.isNil()) throw Error('Missing manager bundle identifier');
+    return ObjC.unwrap(identifier);
+}
+
+/** Read only this manager's JSON-encoded menu choice; absent and malformed data stay off.
+ * @returns {{kind:'valid',enabled:boolean}|{kind:'invalid',enabled:false}|{kind:'missing',enabled:false}} */
+function installerLoadMenuPreference() {
+    if (installerUI.preview) return { kind: 'missing', enabled: false };
+    try {
+        const domain = installerPreferences().persistentDomainForName($(installerPreferenceDomain()));
+        if (!domain || domain.isNil()) return { kind: 'missing', enabled: false };
+        const value = domain.objectForKey('staticMenu');
+        if (!value || value.isNil()) return { kind: 'missing', enabled: false };
+        if (!value.isKindOfClass($.NSString.class)) return { kind: 'invalid', enabled: false };
+        const text = ObjC.unwrap(value);
+        if (typeof text !== 'string' || text.length > 16) return { kind: 'invalid', enabled: false };
+        return FPDFInstallerModel.parseMenuPreference(JSON.parse(text));
+    } catch (_error) {
+        return { kind: 'invalid', enabled: false };
+    }
+}
+
+/** Persist only the menu key, checking both synchronization and exact readback.
+ * Preview, malformed existing data and write failures never claim success.
+ * @param {boolean} enabled @returns {boolean} */
+function installerSaveMenuPreference(enabled) {
+    if (installerUI.preview || typeof enabled !== 'boolean') return false;
+    const previous = installerLoadMenuPreference();
+    if (previous.kind === 'invalid') return false;
+    let defaults = null;
+    let wrote = false;
+    try {
+        defaults = installerPreferences();
+        wrote = true;
+        defaults.setObjectForKey($(JSON.stringify(enabled)), 'staticMenu');
+        if (defaults.synchronize) {
+            const saved = installerLoadMenuPreference();
+            if (saved.kind === 'valid' && saved.enabled === enabled) return true;
+        }
+    } catch (_error) {
+        // Roll back a possibly applied write below; never claim success.
+    }
+    if (defaults && wrote) {
+        try {
+            if (previous.kind === 'missing') defaults.removeObjectForKey('staticMenu');
+            else defaults.setObjectForKey($(JSON.stringify(previous.enabled)), 'staticMenu');
+            defaults.synchronize;
+        } catch (_error) {
+            // The caller displays uncertainty; no success is reported.
+        }
+    }
+    return false;
+}
+
+/** Obtain only the bundled login agent; native failures are reported by callers. @returns {any} */
+function installerLoginService() {
+    ObjC.import('ServiceManagement');
+    return $.SMAppService.agentServiceWithPlistName('com.wonjun-lab.finder-pdf-converter.login.plist');
+}
+
+/** Allow new login registration only for a manager retained in an Applications directory. @returns {boolean} */
+function installerLoginEligible() {
+    try {
+        const path = ObjC.unwrap($.NSBundle.mainBundle.bundlePath.stringByResolvingSymlinksInPath);
+        const homeApps = ObjC.unwrap($(ObjC.unwrap($.NSHomeDirectory()) + '/Applications').stringByResolvingSymlinksInPath);
+        return typeof path === 'string' && (path.startsWith(homeApps + '/') || path.startsWith('/Applications/'));
+    } catch (_error) { return false; }
+}
+
+/** Read the authoritative OS status and distinguish not-found from a failed API read.
+ * @returns {{status:'enabled'|'disabled'|'approval-required'|'unavailable',readable:boolean,nativeStatus:number|null}} */
+function installerLoginObservation() {
+    if (installerUI.preview) return { status: 'unavailable', readable: false, nativeStatus: null };
+    try {
+        const value = installerLoginService().status;
+        const normalized = typeof value === 'string' && /^[0-3]$/.test(value) ? Number(value) : value;
+        if (typeof normalized !== 'number' || !Number.isInteger(normalized) || normalized < 0 || normalized > 3)
+            return { status: 'unavailable', readable: false, nativeStatus: null };
+        return { status: FPDFInstallerModel.loginPresentation(normalized), readable: true, nativeStatus: normalized };
+    } catch (_error) { return { status: 'unavailable', readable: false, nativeStatus: null }; }
+}
+
+/** Return only the status shown to the user; no request is treated as authorization.
+ * @returns {'enabled'|'disabled'|'approval-required'|'unavailable'} */
+function installerLoginStatus() {
+    return installerLoginObservation().status;
+}
+
+/** Display actual OS state and whether the current manager location permits enabling it. */
+function installerRefreshLogin() {
+    const observed = installerLoginObservation();
+    const status = observed.status;
+    const eligible = installerLoginEligible();
+    installerUI.loginToggle.allowsMixedState = true;
+    installerUI.loginToggle.state = status === 'enabled' ? 1 : status === 'approval-required' ? -1 : 0;
+    installerUI.loginToggle.enabled = !installerUI.preview && observed.readable && (eligible || status === 'enabled' || status === 'approval-required');
+    const key = !observed.readable ? 'loginUnavailable' :
+        !eligible && (status === 'disabled' || observed.nativeStatus === 3) ? 'loginMove' :
+        observed.nativeStatus === 3 ? 'loginNotRegistered' :
+        status === 'enabled' ? 'loginEnabled' : status === 'disabled' ? 'loginDisabled' :
+        status === 'approval-required' ? 'loginApproval' : 'loginUnavailable';
+    installerUI.loginStatus.stringValue = $(installerUI.strings[key]);
+}
+
+/** Perform only the user's login choice, then show the actual OS status, including refusal. */
+function installerToggleLogin() {
+    if (installerUI.preview) return;
+    const before = installerLoginObservation();
+    if (!before.readable) { installerRefreshLogin(); return; }
+    // AppKit can cycle Off to Mixed on the first click. Intent comes from the
+    // confirmed service state, not the checkbox's transient mixed value.
+    const enable = before.nativeStatus === 0 || before.nativeStatus === 3;
+    if (enable && !installerLoginEligible()) { installerRefreshLogin(); return; }
+    let success = false;
+    try {
+        const service = installerLoginService();
+        success = Boolean(enable ? service.registerAndReturnError(null) : service.unregisterAndReturnError(null));
+    } catch (_error) { success = false; }
+    installerRefreshLogin();
+    const observed = installerLoginStatus();
+    if (enable ? observed !== 'enabled' && observed !== 'approval-required' : observed !== 'disabled') success = false;
+    if (!success) installerLoginError();
+}
+
+/** Report that macOS did not confirm a requested login change. */
+function installerLoginError() {
+    const alert = $.NSAlert.alloc.init;
+    alert.messageText = $(installerUI.strings.loginErrorTitle);
+    alert.informativeText = $(installerUI.strings.loginErrorBody);
+    alert.addButtonWithTitle($(installerUI.strings.close));
+    alert.runModal;
+}
+
+/** Create or remove one static native template image according to the confirmed preference. */
+function installerUpdateMenu() {
+    if (installerUI.menuEnabled && !installerUI.statusItem) {
+        const image = $.NSImage.imageWithSystemSymbolNameAccessibilityDescription('doc.text', $(installerUI.strings.product));
+        if (!image || image.isNil()) throw Error('Static menu image unavailable');
+        image.setTemplate(true);
+        const item = $.NSStatusBar.systemStatusBar.statusItemWithLength($.NSVariableStatusItemLength);
+        installerUI.statusItem = item;
+        item.button.image = image;
+        const menu = $.NSMenu.alloc.initWithTitle('');
+        const open = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent($(installerUI.strings.openManager), 'openManager:', '');
+        open.target = installerUI.controller;
+        menu.addItem(open);
+        const quit = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent($(installerUI.strings.quit), 'quitInstaller:', '');
+        quit.target = installerUI.controller;
+        menu.addItem(quit);
+        item.menu = menu;
+    } else if (!installerUI.menuEnabled && installerUI.statusItem) {
+        $.NSStatusBar.systemStatusBar.removeStatusItem(installerUI.statusItem);
+        installerUI.statusItem = null;
+    }
+}
+
+/** Show a native error without exposing paths or treating failed persistence as success. */
+function installerPreferenceError() {
+    const alert = $.NSAlert.alloc.init;
+    alert.messageText = $(installerUI.strings.preferenceErrorTitle);
+    alert.informativeText = $(installerUI.strings.preferenceErrorBody);
+    alert.addButtonWithTitle($(installerUI.strings.close));
+    alert.runModal;
+}
+
+/** Reopen the existing window and refresh only when no owned operation is active. */
+function installerOpen() {
+    installerUI.finished = false;
+    if (installerUI.loginToggle && installerUI.loginStatus) installerRefreshLogin();
+    const action = FPDFInstallerModel.managerAction(installerUI.running ? installerUI.invoked : null, !!installerUI.menuEnabled, 'open');
+    $.NSApp.setActivationPolicy(0);
+    installerUI.window.makeKeyAndOrderFront(null);
+    $.NSApp.activateIgnoringOtherApps(true);
+    if (action === 'show' && !installerUI.preview) installerStart('inspect');
+}
+
+/** Apply an explicit menu choice only after the app's own preference confirms it. */
+function installerToggleMenu() {
+    const enabled = Number(installerUI.menuToggle.state) === 1;
+    if (!installerSaveMenuPreference(enabled)) {
+        installerUI.menuToggle.state = installerUI.menuEnabled ? 1 : 0;
+        installerPreferenceError();
+        return;
+    }
+    installerUI.menuEnabled = enabled;
+    try {
+        installerUpdateMenu();
+    } catch (_error) {
+        installerUI.menuEnabled = false;
+        installerUpdateMenu();
+        installerSaveMenuPreference(false);
+        installerUI.menuToggle.state = 0;
+        installerPreferenceError();
+    }
+}
+
 /** Route the native Command-Q menu item directly to the guarded controller.
  * The applet's default Quit Apple Event waits for run() and cannot cancel a modal inspect.
  * @param {any} menu @returns {boolean} Whether an existing Command-Q item was rebound.
@@ -611,7 +824,7 @@ function installerWireQuit(menu) {
             Number(item.keyEquivalentModifierMask) === Number($.NSEventModifierFlagCommand)
         ) {
             item.target = installerUI.controller;
-            item.action = 'closeInstaller:';
+            item.action = 'quitInstaller:';
             item.keyEquivalentModifierMask = $.NSEventModifierFlagCommand;
             item.enabled = true;
             menu.autoenablesItems = false;
@@ -643,16 +856,25 @@ function installerInstallQuitMenu() {
     applicationMenu.addItem(
         $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent(
             $(installerUI.strings.quit),
-            'closeInstaller:',
+            'quitInstaller:',
             'q',
         ),
     );
     installerWireQuit(main);
 }
 
-/** Close immediately for inspection, or after a mutation has finished/restored. */
+/** Hide a safely closed window when its menu is enabled, otherwise quit. */
 function installerClose() {
     if (!installerPrepareClose()) return;
+    const action = FPDFInstallerModel.managerAction(null, !!installerUI.menuEnabled, 'close');
+    if (action === 'hide') installerUI.window.orderOut(null);
+    else installerQuit();
+}
+
+/** Explicit Quit preserves preferences and refuses to interrupt an active mutation. */
+function installerQuit() {
+    if (!installerPrepareClose()) return;
+    if (FPDFInstallerModel.managerAction(null, !!installerUI.menuEnabled, 'quit') !== 'exit') return;
     installerUI.finished = true;
     if (installerUI.window) installerUI.window.orderOut(null);
     $.NSApp.terminate(null);
@@ -663,6 +885,11 @@ ObjC.registerSubclass({
     superclass: 'NSObject',
     protocols: ['NSWindowDelegate', 'NSApplicationDelegate'],
     methods: {
+        'forwardingTargetForSelector:': {
+            types: ['id', ['SEL']],
+            // Preserve the applet delegate's Apple Event handling without bridging NSError pointers.
+            implementation: () => installerUI.originalDelegate || null,
+        },
         'primary:': {
             types: ['void', ['id']],
             implementation: () => {
@@ -675,6 +902,14 @@ ObjC.registerSubclass({
             implementation: () => {
                 installerClose();
             },
+        },
+        'openManager:': { types: ['void', ['id']], implementation: () => { installerOpen(); } },
+        'quitInstaller:': { types: ['void', ['id']], implementation: () => { installerQuit(); } },
+        'toggleLogin:': { types: ['void', ['id']], implementation: () => { installerToggleLogin(); } },
+        'toggleMenu:': { types: ['void', ['id']], implementation: () => { installerToggleMenu(); } },
+        'applicationShouldHandleReopen:hasVisibleWindows:': {
+            types: ['bool', ['id', 'bool']],
+            implementation: () => { installerOpen(); return true; },
         },
         'details:': {
             types: ['void', ['id']],
@@ -711,7 +946,7 @@ function run(_arguments) {
         FPDF_INSTALLER_PREVIEW_ONLY &&
         options.preview === null
     )
-        options.preview = 'fresh';
+        { if (options.background) throw Error('Preview cannot launch in background'); options.preview = 'fresh'; }
     installerUI.preview = options.preview !== null;
     const language =
         options.locale ||
@@ -719,12 +954,18 @@ function run(_arguments) {
         FPDFInstallerModel.language(ObjC.deepUnwrap($.NSLocale.preferredLanguages));
     installerUI.strings = installerStrings(language);
     const t = installerUI.strings;
+    const menuPreference = installerLoadMenuPreference();
+    installerUI.menuEnabled = menuPreference.enabled;
     $.NSApplication.sharedApplication;
-    $.NSApp.setActivationPolicy(0);
+    if (options.background && FPDFInstallerModel.managerAction(null, !!installerUI.menuEnabled, 'background') === 'exit') {
+        $.NSApp.terminate(null);
+        return;
+    }
+    $.NSApp.setActivationPolicy(options.background ? 1 : 0);
     installerUI.controller = $.FPDFInstallerController.alloc.init;
     installerInstallQuitMenu();
     const window = $.NSWindow.alloc.initWithContentRectStyleMaskBackingDefer(
-        $.NSMakeRect(0, 0, 620, 520),
+        $.NSMakeRect(0, 0, 620, 650),
         7,
         2,
         false,
@@ -733,6 +974,7 @@ function run(_arguments) {
     window.title = $(t.window);
     window.delegate = installerUI.controller;
     window.releasedWhenClosed = false;
+    installerUI.originalDelegate = $.NSApp.delegate;
     $.NSApp.delegate = installerUI.controller;
     if (options.appearance)
         window.appearance = $.NSAppearance.appearanceNamed(
@@ -754,6 +996,27 @@ function run(_arguments) {
     const preview = installerLabel(11, 0.5, true);
     preview.stringValue = $(installerUI.preview ? t.preview : '');
     installerPlace(preview, content, developer.bottomAnchor, 0, 20);
+    installerUI.menuToggle = $.NSButton.checkboxWithTitleTargetAction($(t.menuToggle), installerUI.controller, 'toggleMenu:');
+    installerUI.menuToggle.translatesAutoresizingMaskIntoConstraints = false;
+    installerUI.menuToggle.state = installerUI.menuEnabled ? 1 : 0;
+    installerUI.menuToggle.enabled = !installerUI.preview;
+    content.addSubview(installerUI.menuToggle);
+    installerUI.menuToggle.leadingAnchor.constraintEqualToAnchorConstant(content.leadingAnchor, 28).active = true;
+    installerUI.menuToggle.topAnchor.constraintEqualToAnchorConstant(preview.bottomAnchor, 4).active = true;
+    installerUI.loginToggle = $.NSButton.checkboxWithTitleTargetAction($(t.loginToggle), installerUI.controller, 'toggleLogin:');
+    installerUI.loginToggle.translatesAutoresizingMaskIntoConstraints = false;
+    content.addSubview(installerUI.loginToggle);
+    installerUI.loginToggle.leadingAnchor.constraintEqualToAnchorConstant(content.leadingAnchor, 28).active = true;
+    installerUI.loginToggle.topAnchor.constraintEqualToAnchorConstant(installerUI.menuToggle.bottomAnchor, 8).active = true;
+    installerUI.loginStatus = installerLabel(11, 0, true);
+    installerUI.loginStatus.stringValue = $(t.loginUnavailable);
+    installerUI.loginStatus.translatesAutoresizingMaskIntoConstraints = false;
+    content.addSubview(installerUI.loginStatus);
+    installerUI.loginStatus.leadingAnchor.constraintEqualToAnchorConstant(content.leadingAnchor, 48).active = true;
+    installerUI.loginStatus.trailingAnchor.constraintEqualToAnchorConstant(content.trailingAnchor, -28).active = true;
+    installerUI.loginStatus.topAnchor.constraintEqualToAnchorConstant(installerUI.loginToggle.bottomAnchor, 2).active = true;
+    installerUI.loginStatus.heightAnchor.constraintEqualToConstant(28).active = true;
+    installerRefreshLogin();
     installerUI.spinner = $.NSProgressIndicator.alloc.initWithFrame($.NSMakeRect(0, 0, 0, 0));
     installerUI.spinner.translatesAutoresizingMaskIntoConstraints = false;
     installerUI.spinner.style = 0;
@@ -801,11 +1064,28 @@ function run(_arguments) {
     ).active = true;
     window.initialFirstResponder = installerUI.primary;
     window.center;
-    window.makeKeyAndOrderFront(null);
-    $.NSApp.activateIgnoringOtherApps(true);
-    if (installerUI.preview) installerRender(installerPreview(options.preview || 'fresh'));
-    else installerStart('inspect');
+    try {
+        installerUpdateMenu();
+        if (menuPreference.kind === 'invalid') installerPreferenceError();
+    } catch (_error) {
+        installerUI.menuEnabled = false;
+        installerUpdateMenu();
+        installerUI.menuToggle.state = 0;
+        if (options.background) { $.NSApp.terminate(null); return; }
+        installerPreferenceError();
+    }
+    if (!options.background) {
+        window.makeKeyAndOrderFront(null);
+        $.NSApp.activateIgnoringOtherApps(true);
+        if (installerUI.preview) installerRender(installerPreview(options.preview || 'fresh'));
+        else installerStart('inspect');
+    }
     // A stay-open applet returns to its existing AppKit event loop.
     // Global references retain the window, controller, task and timer.
     return;
+}
+
+/** Handle the applet's reopen Apple Event using the same guarded window route. */
+function reopen() {
+    if (installerUI.window && !installerUI.finished) installerOpen();
 }

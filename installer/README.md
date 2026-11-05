@@ -16,12 +16,12 @@ Contents/Resources/payload/installer/managed-install.sh
 Contents/Resources/payload
 ```
 
-The app performs inspection when opened. It offers Install, Update, or Recover
+The retained manager performs inspection when opened or reopened. Its optional static menu is off by default; its document glyph does not indicate progress. Closing the window keeps the menu when enabled; Quit leaves the choice unchanged. Finder actions do not depend on the manager or menu. Login launch is independently opt-in and available for a manager retained in `~/Applications` or `/Applications`. Its displayed state comes from macOS ServiceManagement, including approval-required and unavailable; it is never silently enabled. A bundled short-lived login helper exits when this manager is already running, otherwise launches it in background. Background launch keeps the menu only if the separate menu setting is on; it does not inspect or modify the installation. It offers Install, Update, or Recover
 only when the parsed outcome allows that operation. Conflict, malformed results,
 and contradictory process exits never become completion. An active backend runs
 through `NSTask` while the stay-open applet's existing AppKit event loop stays responsive. Window close
-and application Quit defer during install/recovery; a mutation finishes or
-restores rather than being cancelled halfway through replacement. Read-only
+and application Quit are refused during install/recovery; retry after the operation
+finishes or restores. A mutation is not cancelled halfway through replacement. Read-only
 inspection has a 45-second deadline and can be asked to close at any time. Closing or
 expiring inspection terminates only that window's owned inspection task; it
 never terminates an install/recovery task or changes installed items. Cancellation
@@ -58,13 +58,19 @@ On macOS, choose a new absolute output directory outside the repository:
 bash installer/build-installer.sh --output-dir "$HOME/scratch/finder-pdf-installer-build"
 ```
 
-The script uses `osacompile -s` so the run handler returns to the standard applet event loop; global references retain callbacks and the window. Guarded Close calls native termination. No nested event loop or custom event pump is used.
+The script uses `osacompile -s` so the run handler returns to the standard applet event loop; global references retain callbacks and the window. Guarded Close hides the window when the optional menu is enabled; during an installation or recovery, Close and Quit are refused and must be tried again after it finishes. No nested event loop or custom event pump is used.
 
-The script produces `Finder PDF Converter Installer.app` and a ZIP in that
-directory. Existing outputs are refused. It uses macOS Bash, `osacompile`,
-`PlistBuddy`, `codesign`, and `ditto`; no Node or Python runtime is shipped or
-required by the installed app. No Developer ID account, certificate access,
+The script produces `Finder PDF Converter.app` and a ZIP in that
+directory. Existing outputs are refused. The full build uses macOS Bash,
+`osacompile`, Apple Command Line Tools (`clang` and the macOS SDK),
+`PlistBuddy`, `codesign`, and `ditto`. The helper is compiled for arm64 and
+x86_64 with a macOS 13 deployment target; only the current Mac architecture
+has been exercised. This does not establish a minimum supported macOS release
+or validate Intel execution. The built app needs neither a compiler nor Node
+or Python. No Developer ID account, certificate access,
 Gatekeeper change, quarantine removal, or publication is performed.
+
+To retain the manager, manually copy the locally built app to your own `~/Applications` folder and open it from Finder. The builder never installs or replaces an existing app: preserve any existing destination, link, or item whose ownership is uncertain. A later manager package may be manually selected by the user; the Install or Update button uses that manager’s own bundled source and is an explicit action. The manager does not update itself.
 
 The build copies an explicit payload of 37 regular files: 20 runtime scripts,
 four metadata/localization files for each of the three workflows, `install.sh`,
@@ -104,9 +110,11 @@ The standard Cocoa process-only language pair `-AppleLanguages '(en)'` or
 including in the full installer. It changes only that process's language and
 never writes persistent preferences. Only those two exact forms are accepted;
 duplicates, misplaced pairs, and other Cocoa overrides are refused.
-Preview screenshots do not demonstrate successful installation or conversion.
-The approved PoC gate requires actual native rendering and user review before
-merge or deployment.
+Preview mode does not read or write menu preferences or query or register the login service. Preview screenshots do not demonstrate successful installation or conversion.
+The owner reviewed the rendered PoC and chose “현재 구성 유지” on 2026-11-05.
+The [before/after image](../docs/review/management-static-menu/before-after-ko.png) and
+[static glyph image](../docs/review/management-static-menu/static-glyph-native.png)
+record that visual review; installation and Finder checks remain separate.
 
 ## Private UI event-transport fixtures
 
@@ -170,8 +178,9 @@ registers the real AppKit protocols without opening a window, exercises timeout
 and cancellation with real owned read-only processes and real AppKit controls,
 checks that install/recovery close guards preserve their processes, and proves
 preview and invalid launch arguments cannot invoke a backend. It catches protocol encodings that `osacompile` alone cannot validate.
-Actual window, accessibility, appearance, keyboard, and Finder operation remain
-separate integration gates. These local commands are not CI merge gates unless a
+Actual window, accessibility, appearance, keyboard, and Finder operation require
+separate evidence; the exercised manager, appearance, and Finder results are in
+the [verification record](../docs/review/management-static-menu/README.md). These local commands are not CI merge gates unless a
 future CI configuration explicitly runs and enforces them.
 
 The import-graph check declares the UI → model and UI → backend public-command

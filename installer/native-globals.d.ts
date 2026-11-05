@@ -28,6 +28,9 @@ type InstallerOwnedProcess = InstallerProcessFact & {depth:number};
 type InstallerProcessSnapshot = {kind:'owned';processes:InstallerOwnedProcess[]}|{kind:'unavailable'};
 /** Pure public decision surface supplied by the concatenated model source. */
 declare const FPDFInstallerModel: {
+  parseMenuPreference(value:unknown):{kind:'valid';enabled:boolean}|{kind:'invalid';enabled:false};
+  loginPresentation(status:unknown):'enabled'|'disabled'|'approval-required'|'unavailable';
+  managerAction(operation:InstallerOperation|null,menuEnabled:boolean,intent:'open'|'close'|'quit'|'background'):'show'|'retain'|'defer'|'hide'|'exit'|'background';
   inspectionProcesses(text:string,rootPID:number):InstallerProcessSnapshot;
   inspectionExpired(operation:InstallerOperation,started:number,now:number):boolean;
   parseReply(text:unknown,operation:unknown,exit:unknown):InstallerParsed;

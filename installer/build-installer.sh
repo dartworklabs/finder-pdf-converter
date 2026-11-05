@@ -27,7 +27,7 @@ check_parents() {
 check_parents "$output"
 mkdir -p "$output"
 [ -d "$output" ] && [ "$(/usr/bin/stat -f %u "$output")" = "$(id -u)" ] || exit 1
-name='Finder PDF Converter Installer.app'
+name='Finder PDF Converter.app'
 [ "$preview" -eq 0 ] || name='Finder PDF Converter Preview.app'
 [ ! -e "$output/$name" ] && [ ! -L "$output/$name" ] && [ ! -e "$output/${name%.app}.zip" ] && [ ! -L "$output/${name%.app}.zip" ] || { printf '%s\n' 'Build output already exists; choose a new output directory.' >&2; exit 1; }
 stage=$(mktemp -d "$output/.finder-pdf-build.XXXXXX")
@@ -43,6 +43,22 @@ for language in en ko; do
 done
 printf '%s\n' 'Local developer artifact. Ad-hoc signed only; public-release trust is unverified.' > "$resources/developer-status.txt"
 if [ "$preview" -eq 0 ]; then
+  # Login assets have the same bounded, non-redirected source contract as payload members.
+  for file in installer/login-agent.plist installer/login-helper.m; do
+    source_file="$root/$file"
+    check_parents "$source_file"
+    [ -f "$source_file" ] && [ ! -L "$source_file" ] && [ "$(/usr/bin/stat -f %l "$source_file")" -eq 1 ] || { printf 'Invalid login asset: %s\n' "$file" >&2; exit 1; }
+    [ "$(/usr/bin/stat -f %z "$source_file")" -le 2097152 ] || { printf 'Oversized login asset: %s\n' "$file" >&2; exit 1; }
+  done
+  mkdir -p "$app/Contents/Library/LaunchAgents"
+  cp "$root/installer/login-agent.plist" "$app/Contents/Library/LaunchAgents/com.wonjun-lab.finder-pdf-converter.login.plist"
+  # CLT is a build-time dependency; the compiled helper ships inside the app.
+  clang=$(/usr/bin/xcrun --find clang)
+  sdk=$(/usr/bin/xcrun --sdk macosx --show-sdk-path)
+  "$clang" -fobjc-arc -arch arm64 -arch x86_64 -mmacosx-version-min=13.0 \
+    -isysroot "$sdk" -framework Foundation -framework AppKit \
+    "$root/installer/login-helper.m" -o "$app/Contents/MacOS/fpdf-login-helper"
+  /usr/bin/codesign --force --sign - "$app/Contents/MacOS/fpdf-login-helper"
   mkdir "$resources/payload"
   files=(locale.sh preferred-language.js convert.sh conversion-session.sh conversion-session.js conversion-status.js hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js print-fit.sh print-fit.js print-panel.js review-model.js document-review.js install.sh doctor.sh installer/managed-install.sh installer/managed-engine.js installer/stage-managed.sh)
   for workflow in 'PDF로 변환.workflow' '용지에 맞춰 인쇄.workflow' 'PDF 합치기.workflow'; do
@@ -64,8 +80,10 @@ if [ "$preview" -eq 0 ]; then
   done
   (cd "$resources/payload" && /usr/bin/shasum -a 256 "${files[@]}") > "$resources/payload.sha256"
 fi
-/usr/libexec/PlistBuddy -c 'Add :CFBundleIdentifier string com.wonjun-lab.finder-pdf-converter.installer' "$app/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c 'Set :CFBundleName Finder PDF Converter Installer' "$app/Contents/Info.plist"
+bundle_id='com.wonjun-lab.finder-pdf-converter.installer'
+[ "$preview" -eq 0 ] || bundle_id="$bundle_id.preview"
+/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $bundle_id" "$app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleName Finder PDF Converter' "$app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleDevelopmentRegion en' "$app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Add :CFBundleLocalizations array' "$app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Add :CFBundleLocalizations:0 string en' "$app/Contents/Info.plist"

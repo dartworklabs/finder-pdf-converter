@@ -25,19 +25,21 @@ The Quick Action menus are **Convert to PDF**, **Print to Fit**, and **Merge PDF
 
 ## Install
 
-### Graphical installer — developer preview
+### Management app — developer build
 
-A native **Finder PDF Converter Installer.app** is available as a locally built developer preview. A signed, notarized public download has **not** been published. This preview is ad-hoc signed and has not been notarized by Apple; this local ad-hoc build requires no Apple Developer account or paid membership. For build instructions, see [Native installer](installer/README.md).
+The native **Finder PDF Converter.app** is available as a local developer build. A signed, notarized public download has **not** been published. This app is ad-hoc signed and has not been notarized by Apple; this local ad-hoc build requires no Apple Developer account or paid membership. For build instructions, see [Native installer](installer/README.md).
 
 If you have been provided this developer app:
 
-1. Extract its ZIP if needed, then open **Finder PDF Converter Installer.app**.
+1. Extract its ZIP if needed, copy **Finder PDF Converter.app** into `~/Applications`, and open it. If an item with that name is already there, keep it and decide separately whether to replace it.
 2. Review the installation state, then choose **Install** or **Update**. This installs all three actions for your Mac account without Terminal or an administrator password.
 3. After **Installation complete**, continue with [Enable it in Finder](#3-enable-it-in-finder) if needed and [Try a single PNG](#4-try-a-single-png). Completion confirms installation, not app licensing, permissions, or successful conversion.
 
 If the app says Finder menu registration needs checking, the installation files are already verified. Open a new Finder window, enable missing Quick Actions, then try the PNG check.
 
-The app keeps its managed source in the real directory `~/Library/Application Support/Finder PDF Converter/source`. After successful installation, you can remove the downloaded app or extracted download folder; later updates can come from a new download location. An existing checkout installation is adopted only when all three actions, ownership markers, source files, inventories, and signatures can be verified. Keep the old source until migration succeeds. Missing or moved source, modified files, and foreign items stop installation for review; do not remove an uncertain item just to bypass the conflict.
+The app keeps its managed source in the real directory `~/Library/Application Support/Finder PDF Converter/source`. Keep the copy in `~/Applications` to reopen the management window and inspect the installation. The app does not update itself; a later locally built app contains its own source for an explicit Install or Update action. An existing checkout installation is adopted only when all three actions, ownership markers, source files, inventories, and signatures can be verified. Keep the old source until migration succeeds. Missing or moved source, modified files, and foreign items stop installation for review; do not remove an uncertain item just to bypass the conflict.
+
+The management window offers a static menu-bar icon and login launch as independent options, both off by default for a fresh setup. Login launch can require approval in macOS Login Items; the window shows the actual status. When the menu icon is on, closing the window leaves the icon available to reopen it. **Quit** exits the app without changing either setting. You cannot quit during installation or recovery; quit again after it finishes. The installed Finder Quick Actions continue to work when the app or menu is off.
 
 If an interrupted install needs recovery, use **Recover** when offered and keep the existing files and backups. If recovery is blocked, retain them and share the diagnostic code from **Technical details** with the project maintainer. The app does not grant permissions, launch document apps, or submit print jobs. Permission guidance applies when you later run a conversion yourself.
 
@@ -47,7 +49,7 @@ For developers building from this repository, use a new absolute output director
 bash installer/build-installer.sh --output-dir "$HOME/scratch/finder-pdf-installer-build"
 ```
 
-This produces the local `.app` and ZIP. It does not publish a release or change macOS security settings. An inert preview-only build for reviewing screens is documented in [Native installer](installer/README.md); it cannot install.
+The full build requires Apple Command Line Tools and produces the local `.app` and ZIP. The built app does not require a compiler. Building does not publish a release or change macOS security settings. An inert preview-only build for reviewing screens is documented in [Native installer](installer/README.md); it cannot install.
 
 ### Advanced: checkout CLI
 
@@ -99,7 +101,7 @@ The installed bundles keep the names `PDF로 변환.workflow`, `용지에 맞춰
 
 ### Graphical installer
 
-Open a newer developer installer app and choose **Update** when offered. Its download location can differ from the previous one; the verified managed source stays at the stable path above. If the same version is already installed, the app says so. Repeat the PNG check after an update. Unverifiable ownership or contents stop the update, and an interrupted installation must be recovered before another update proceeds.
+Open a newer locally built management app and choose **Update** when offered. Its bundled source supplies the update, and the verified managed source stays at the stable path above. Replacing a retained app is a separate manual decision; the app does not replace itself. If the same version is already installed, the app says so. Repeat the PNG check after an update. Unverifiable ownership or contents stop the update, and an interrupted installation must be recovered before another update proceeds.
 
 ### Advanced: checkout CLI
 

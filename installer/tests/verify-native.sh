@@ -126,7 +126,7 @@ installerUI.controller = controller;
 if (!installerWireQuit(nativeMenu)) throw Error('Native Quit menu item was not found');
 if (unrelatedQ.target.isEqual(controller)) throw Error('Another modifier shortcut was rebound');
 if (!nativeQuitItem.target.isEqual(controller)) throw Error('Quit still targets the applet');
-if (ObjC.unwrap($.NSStringFromSelector(nativeQuitItem.action)) !== 'closeInstaller:') throw Error('Quit bypasses the close guard');
+if (ObjC.unwrap($.NSStringFromSelector(nativeQuitItem.action)) !== 'quitInstaller:') throw Error('Quit bypasses the guarded controller');
 if (Number(nativeQuitItem.keyEquivalentModifierMask) !== Number($.NSEventModifierFlagCommand)) throw Error('Command-Q shortcut was lost');
 const timedTask = ownedSleepTask();
 try {
@@ -216,3 +216,6 @@ for (const arguments_ of [
 JXA
 /usr/bin/osascript -l JavaScript "$stage/check.js"
 printf '%s\n' 'installer native: protocol encodings, real owned-task inspection timeout/cancel and mutation Quit/window guards, inert preview, bounded stdout, timer-before-launch, process-only language and launch argument refusal passed'
+bash "$root/tests/verify-management-native.sh"
+bash "$root/tests/verify-login-control.sh"
+bash "$root/tests/verify-background.sh"
