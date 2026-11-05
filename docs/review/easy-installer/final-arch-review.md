@@ -1,10 +1,10 @@
-# Final architecture review record — completion pending
+# Final architecture review — local Phase 1 PASS
 
-Prepared 2026-11-05 for central review. **This is a completion template, not a final PASS.** The official current-engine `all` run is still running. No tests or real-system operations were performed while preparing this record.
+Finalized 2026-11-05 from retained test records and central review. **PASS — approved local Phase 1 conformance and all current functional acceptance gates.** Final documentation handoff/GitHub merge is not yet asserted; [PR #11](https://github.com/dartworklabs/finder-pdf-converter/pull/11) is the canonical handoff/status record. No tests or real-system operations were performed while preparing this documentation.
 
 ## Review target and authority
 
-- Baseline/observed HEAD: `58652e2827a30976463ed76bde445f8745cf6219`; branch `feature/easy-installer`. The reviewed implementation includes uncommitted changes and new files. At finalization, record the committed head, comparison base and final diff/snapshot identifier here: **pending**.
+- Signed/pushed source commit: `588016d90df3bbc037781173a1769e5b51242c27`; comparison base: `58652e2827a30976463ed76bde445f8745cf6219`; branch `feature/easy-installer`; [draft PR #11](https://github.com/dartworklabs/finder-pdf-converter/pull/11). Frozen source identities below match the official run and the signed commit. This later documentation status update awaits its own handoff commit. Central approved-scope conformance review passed; eventual merge identity/state belongs to PR #11.
 - Approved [spec](../../superpowers/specs/2026-11-05-easy-installation.md) and [plan](../../superpowers/plans/2026-11-05-easy-installation.md) define Phase 1 local native installation. Original approved-content SHA-256 remains `0b07f5f6c0fefc8268d0f2138a23e2aa22ea7d70e8e55b9820a06e45854b52ad`.
 - No Handbook exists. Current authorities are the spec/plan, `README.md` / `README.ko.md`, guarded `install.sh` / `doctor.sh`, and capability-local installer/model/build contracts. See the [integration record](integration-check.md) for actual observations and limits.
 - Repository-owner rendered-UI review: **PASS**, “현재 구성 유지”, frozen UI `f563f9c…`. This does not replace backend regression evidence.
@@ -24,16 +24,16 @@ Prepared 2026-11-05 for central review. **This is a completion template, not a f
 | `install.sh` | `6b8d77a5bc7508a405f94d14b41175dda1846a3bbfdfb829afa17b0f975cab6f` |
 | `doctor.sh` | `25c3678d8fc04964723104ca8c98e5473adad4a62f003bdaaeaefb28600c1d00` |
 
-The official run’s `official-716-all-metadata.json` records its source hashes, command and start time. Compare its terminal metadata and the committed sources with this table before final judgment. Any affected content change requires fresh affected review/evidence; do not reuse an older engine’s PASS.
+The official run’s `official-716-all-metadata.json` records exit 0 and identical seven source hashes before/after; central integration verified those against both the working tree and signed source commit. The run started 2026-11-05 07:10:02.494067 UTC and ended 08:50:09.218504 UTC, taking 6006.593974583 seconds (100 minutes 7 seconds rounded). Any affected content change requires fresh affected review/evidence; do not reuse an older engine’s PASS.
 
 ## Qualitative conformance
 
-| Relation | Current record | Final reviewer action |
+| Relation | Result | Evidence and limits |
 | --- | --- | --- |
-| Implementation ↔ approved spec | Independent current-`716205f…` static review **passed**, as reported by central integration. Scope remains per-user local development; foreign data, rollback/recovery, bounded trusted payload and truthful readiness are preserved. | Attach independent-review record/reference and confirm final diff identity. |
-| Implementation ↔ plan | Native UI/package, human PoC and actual current-Mac checks passed. Current full backend regression remains pending. The initial missing-backend red-run artifact is unverified and must not be invented. | Reconcile remaining current automated gate results and historical evidence limits. |
-| Implementation ↔ current authorities | Unchanged UI/model/build evidence and current package/Mac observations are recorded in the integration check; existing CLI ownership and explicit source-root diagnosis remain applicable. | Confirm final frozen diff and upstream comparison; record PASS/FAIL. |
-| Decision records / Handbook | N/A — no ADR or Handbook change in this review scope. | Confirm this remains true in the final diff. |
+| Implementation ↔ approved spec | PASS | Central review covered approved per-user local scope, preserved foreign data, rollback/recovery, bounded trusted payload, truthful readiness and permission limits. The independent narrow lease-delta review is `716-independent-static-review.md`. |
+| Implementation ↔ plan | PASS — current functional acceptance | Full backend/inspection superset, six guard mutants, UI/package, actual Mac and human PoC checks passed. The initial missing-backend red-run artifact remains an unverified historical process-evidence limit, with its original procedure checkboxes unticked; no historical evidence is invented. |
+| Implementation ↔ current authorities | PASS | Central review covered engine delta, full-gate metadata/source/commit identity, six-guard driver/report, actual Mac/package/preferences and documentation. Existing CLI ownership guards and explicit source-root diagnosis remain applicable. |
+| Decision records / Handbook | N/A | No ADR or Handbook change in this scope; no Handbook exists. |
 
 ## Contract regression gates
 
@@ -44,19 +44,23 @@ Private evidence names below refer to the durable sibling QA folder, not public 
 | Frozen UI/model/boundaries/native/type/lint | PASS, unchanged source | `combined-package-verification.log`; actual combined native lifecycle and cancellation records. Native fixtures are harmless transport proofs, not real installs. |
 | Current package | PASS | `lease-final-package-verification.log`, `build-lease-final-1/package-verification.json`: 37 exact members, no extras, strict ad-hoc signature, stay-open metadata, ZIP/extraction roundtrip. |
 | Current actual Mac update, registration, diagnosis and Finder PNG | PASS | `lease716-actual-managed-proof.json`, `lease716-actual-doctor.log`, `final-finder-smoke/lease716-verification.json`; real registration, released lock, exact payload and measured PNG output. |
-| Final printer-state preservation | PASS | `printer-state-after716.json`: four typed domains, queue-specific recent records, `lpoptions`, default and exact queue set unchanged. Unobservable TCC state remains unknown. |
+| Final printer-state preservation | PASS | `printer-state-after716.json`: four typed domains, the two preserved recent-setting records, `lpoptions`, default and exact queue set unchanged. Unobservable TCC state remains unknown. |
 | Human rendered PoC | PASS | Owner: “현재 구성 유지”; sanitized current and before/after captures in this directory. |
-| Official current `716205f…` full backend gate | **RUNNING / not yet confirmed** | `FINDER_PDF_CONTRACT_JOBS=2 bash installer/tests/verify-managed-install.sh all`; `official-716-all.log`, `official-716-all-metadata.json`. Lock/malformed/core progress and prior `855444f…` 48-case PASS are not a terminal current PASS. |
-| Independent current-engine static review | PASS, central-reported | Attach the durable independent-review reference before finalizing this record. |
-| Final diff/upstream/commit/push/merge | **PENDING** | Record final head/base, review identity, published branch/PR and successful checks. Merge only after the required current full run exits 0. |
+| Official current `716205f…` full backend gate | **PASS, exit 0** | `FINDER_PDF_CONTRACT_JOBS=2 bash installer/tests/verify-managed-install.sh all`; `official-716-all.log`, `official-716-all-metadata.json`, `official-716-cleanup.json`. Exact 48-case matrix plus serial core/tail passed, seven hashes unchanged and fixture cleanup completed. |
+| Independent matrix ledger cross-check | PASS | `root-716-matrix-ledger-check.json`: direct Cartesian expectation equals exactly 48 unique cases, two disjoint 24-case ledgers, no missing/unexpected cases or overlap. The proof’s original matrix-only timestamp preceded final full-run completion. |
+| Six current guard mutants | **PASS, exit 0** | `contract-716-regression-mutants.log`, metadata and summary JSON: six intended assertion/frame failures, not arbitrary errors. `contract-716-mutation-cleanup.json`: all 37 input snapshots restored, fixture removed. |
+| Final source/package identity | PASS | `root-final-package-source-identity.json`: 37 members match, frozen UI/model/builder/backend agree with signed source commit, retained ZIP hash agrees. |
+| Independent current-engine static review | PASS, narrow scope | `716-independent-static-review.md`: descriptor borrowing and fixed staging/registration holder delta; no further concrete blocker identified. Original review-time full-run limit is retained in that record. |
+| Signed source commit/push/draft PR | PASS | `588016d90df3bbc037781173a1769e5b51242c27`, baseline `58652e2827a30976463ed76bde445f8745cf6219`, draft PR #11. |
+| Final central conformance review | PASS | Approved spec/plan and current authority conformance, full-run/source/commit identity, guard evidence, actual Mac and preservation records reviewed centrally. |
+| Documentation handoff/GitHub merge | Not yet recorded | PR #11 is canonical for the subsequent documentation commit and merged state; no future SHA or merge claim is made. |
 
-## Judgment and completion fields
+## Judgment and handoff boundary
 
-**Current judgment: verification incomplete. No merge/deployment/completion approval is implied.** Central integration may prepare the authorized commit/push/draft while the run continues; the full gate remains pending.
+**PASS — ready for the approved local Phase 1 handoff.** The current full backend run, all six current guard mutants, unchanged native UI/model/build checks, CLI guards, actual current-Mac update/Finder operation, source/package identity, printer preservation and human UI review passed. Central qualitative conformance also passed. This is a local review result, not a claim that an external CI or trusted public distribution gate ran.
 
-- Official current run end time, exit code and complete matrix/tail/mutant result: **pending**.
-- Final source identities match the run and package, independent review attached: **pending**.
-- Final qualitative conformance and central reviewer judgment: **pending**.
-- Commit/push/PR/merge identity and evidence: **pending**.
+The current six-mutant run started 2026-11-05 08:52:54.093369 UTC and ended 08:59:24.934916 UTC, taking 390.835614792 seconds. All six source hashes matched before/after. Runner SHA-256: `bea17e46bd1c48cf649c52c4f8dce8fbb206215db22a562df82a03c2ec4799fd`. Central review checked the intended assertions/frames for false registration success, linked legacy parent, hardlinked legacy source, omitted committed-backup preflight, managed-source CLI bypass and misclassified interrupted-journal recovery. All were rejected for the intended reason; full input restoration and fixture cleanup passed.
 
-Resume final merge judgment only after the current full gate is 0, its evidence is complete, and the final frozen diff conforms to the approved spec/plan. Public Developer ID/notarization, quarantined clean-Mac distribution and measured minimum-OS support are separate milestones outside Phase 1, not local completion gates.
+The missing initial backend-red artifact is a historical procedure-evidence gap, not an outstanding current functional acceptance gate. Its original checkbox remains unticked. Source commit/push/draft PR are confirmed above; the final documentation handoff commit and GitHub merge remain future actions. Follow PR #11 for their canonical status rather than inferring a future SHA or merged state from this readiness record.
+
+Public Developer ID/notarization, quarantined clean-Mac distribution and measured minimum-OS support are separate milestones outside Phase 1, not local completion gates. Existing licensing and unobservable permission state remain unknown; no automatic grants or physical printing are claimed.
