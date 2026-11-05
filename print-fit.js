@@ -158,8 +158,8 @@ function disableAdditionalScaling(info) {
     settings.setObjectForKey($(1), $.NSPrintPagesDown);
 }
 
-/** Run one native print panel for the batch, or save the identical drawing path as a proof. */
-function run(argv) {
+/** Render one validated batch; return cancelled or completed for an interactive caller. */
+function printFitRun(argv) {
     const args = argumentsForBatch(argv);
     const docs = readDocuments(args.paths, !!args.merge);
     const selection = selectedPages(args.selection, docs);
@@ -185,7 +185,7 @@ function run(argv) {
         // This action always prints the complete batch. A standalone panel does
         // not know its page count, so do not present a misleading page range.
         panel.options = 1 | 4 | 8;
-        if (Number(panel.runModalWithPrintInfo(info)) !== 1) return;
+        if (Number(panel.runModalWithPrintInfo(info)) !== 1) return 'cancelled';
         const settings = info.dictionary;
         settings.setObjectForKey($(true), $.NSPrintAllPages);
         settings.setObjectForKey($(1), $.NSPrintFirstPage);
@@ -205,4 +205,11 @@ function run(argv) {
     operation.showsProgressPanel = false;
     if (!operation.runOperation) throw new Error('The print operation failed.');
     if (args.proof && !$.NSFileManager.defaultManager.fileExistsAtPath($(args.proof))) throw new Error('The proof PDF was not created.');
+    return 'completed';
+}
+
+/** Preserve the CLI entry point and dispatch to the bundled app when present. */
+function run(argv) {
+    if (typeof printPanelAppRun === 'function') return printPanelAppRun(argv);
+    printFitRun(argv);
 }

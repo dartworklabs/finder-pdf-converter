@@ -2,7 +2,7 @@
 # Prepare an entire selected batch in private snapshots, then open one native
 # review window and print panel, or publish a merged PDF. Public CLI is
 # documented in README; proof/output modes never submit a physical print job.
-# Exit 0 = print operation accepted/proof saved/cancelled, 1 = preparation or
+# Exit 0 = native print completed/proof saved/cancelled, 1 = preparation or
 # rendering failure, 2 = usage/setup failure. Proof mode never submits a job.
 set -u
 umask 077
@@ -21,9 +21,11 @@ merge=0
 output=''
 selection=''
 review_app="$script_dir/Finder PDF Review.app"
+print_app="$script_dir/Finder PDF Print.app"
 work_dir=''
 stage_file=''
 preparation_pid=''
+print_wait_pid=''
 
 # Translate this action's boundary messages without interpreting file names.
 fit_text() {
@@ -69,14 +71,22 @@ fit_cleanup() {
     [[ -z $stage_file ]] || /bin/rm -f -- "$stage_file"
     [[ -z $work_dir ]] || /bin/rm -r -- "$work_dir"
 }
-# Stop only this action's owned preparation session. That session waits for its
-# active document to finish and closes its monitor before snapshots are removed.
+# Stop the owned preparation session, or wait for the owned native print app.
+# Both lifetimes must finish before this action removes their snapshots.
 fit_stop() {
     local status=$1
     if [[ -n $preparation_pid ]]; then
         /bin/kill -TERM "$preparation_pid" 2>/dev/null || true
         wait "$preparation_pid" || true
         preparation_pid=''
+    fi
+    # open -W owns this app instance's lifetime. A signal must not remove PDFs
+    # while its modal print panel still reads them; wait for the user to close it.
+    if [[ -n $print_wait_pid ]]; then
+        while /bin/kill -0 "$print_wait_pid" 2>/dev/null; do
+            wait "$print_wait_pid" || true
+        done
+        print_wait_pid=''
     fi
     exit "$status"
 }
@@ -284,6 +294,59 @@ JXA
         # Revalidate after the panel; exclusive publication also rejects races.
         if [[ -e $destination || -L $destination || ! -w ${destination%/*} ]]; then fit_report "$(fit_text proof)"; exit 2; fi
     fi
+fi
+
+# Interactive printing runs the same renderer inside its own addressable app.
+# Launch success alone is not a print outcome: only its closed atomic result is.
+if [[ -z $proof && $merge == 0 ]]; then
+    if [[ -L $print_app || ! -d $print_app || -L $print_app/Contents || ! -f $print_app/Contents/MacOS/applet ]]; then
+        fit_report "$(fit_text missing)"; exit 2
+    fi
+    if ! /usr/bin/osascript -l JavaScript - "$work_dir/print-manifest.json" "$selection" "$work_dir/print-result.json" "${pdfs[@]}" <<'JXA' >"$work_dir/renderer.log" 2>&1
+ObjC.import('Foundation');
+/** Serialize only the review-approved selection and owned snapshots for the host. */
+function run(argv) {
+    const value = {version: 1, selectionPath: argv[1], resultPath: argv[2], pdfs: argv.slice(3)};
+    if (!$(JSON.stringify(value)).writeToFileAtomicallyEncodingError(argv[0], true, $.NSUTF8StringEncoding, null)) throw Error('Cannot write print manifest');
+}
+JXA
+    then fit_report "$(fit_text renderer)"; exit 1; fi
+    # Defer signals across launch until the app wait PID is owned. Otherwise a
+    # signal in the launch/assignment gap could delete snapshots under the app.
+    print_pending_signal=0
+    trap 'print_pending_signal=130' INT
+    trap 'print_pending_signal=143' TERM HUP
+    /usr/bin/open -W -n "$print_app" --args -AppleLanguages "($fpdf_locale)" --manifest "$work_dir/print-manifest.json" >>"$work_dir/renderer.log" 2>&1 &
+    print_wait_pid=$!
+    trap 'fit_stop 130' INT
+    trap 'fit_stop 143' TERM HUP
+    [[ $print_pending_signal == 0 ]] || fit_stop "$print_pending_signal"
+    wait "$print_wait_pid"
+    print_launch_status=$?
+    print_wait_pid=''
+    print_result="$work_dir/print-result.json"
+    if [[ $print_launch_status != 0 || -L $print_result || ! -f $print_result || ! -O $print_result ]]; then
+        fit_report "$(fit_text renderer)"; exit 1
+    fi
+    print_status=$(/usr/bin/osascript -l JavaScript - "$print_result" <<'JXA' 2>>"$work_dir/renderer.log"
+ObjC.import('Foundation');
+/** Recognize the entire bounded, closed result, rejecting duplicate/unknown keys. */
+function run(argv) {
+    const data = $.NSData.dataWithContentsOfFile(argv[0]);
+    if (data.isNil() || Number(data.length) > 1024) throw Error('Invalid print result');
+    const text = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding));
+    const status = '"status"\\s*:\\s*"(?:completed|cancelled|error)"';
+    const version = '"version"\\s*:\\s*1';
+    const closed = new RegExp('^\\s*\\{\\s*(?:' + version + '\\s*,\\s*' + status + '|' + status + '\\s*,\\s*' + version + ')\\s*\\}\\s*$');
+    if (typeof text !== 'string' || !closed.test(text)) throw Error('Invalid print result');
+    return JSON.parse(text).status;
+}
+JXA
+    ) || { fit_report "$(fit_text renderer)"; exit 1; }
+    case $print_status in
+        completed|cancelled) exit 0 ;;
+        *) fit_report "$(fit_text renderer)"; exit 1 ;;
+    esac
 fi
 
 # Validate the entire batch and selection before opening the single print panel.

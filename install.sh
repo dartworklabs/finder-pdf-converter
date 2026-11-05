@@ -9,9 +9,11 @@ print_source="$root/용지에 맞춰 인쇄.workflow"
 print_target="$HOME/Library/Services/용지에 맞춰 인쇄.workflow"
 merge_source="$root/PDF 합치기.workflow"
 merge_target="$HOME/Library/Services/PDF 합치기.workflow"
-review_name="Finder PDF Review.app"
-review_inventory="review-app.sha256"
-resources=(locale.sh preferred-language.js convert.sh conversion-session.sh conversion-session.js conversion-status.js hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js print-fit.sh print-fit.js review-model.js document-review.js)
+app_names=("Finder PDF Review.app" "Finder PDF Print.app")
+app_inventories=(review-app.sha256 print-app.sha256)
+app_sources=("review-model.js document-review.js" "print-fit.js print-panel.js")
+app_identifiers=(review print)
+resources=(locale.sh preferred-language.js convert.sh conversion-session.sh conversion-session.js conversion-status.js hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js print-fit.sh print-fit.js print-panel.js review-model.js document-review.js)
 localizations=(en.lproj ko.lproj)
 bundle_resources=(en.lproj/InfoPlist.strings ko.lproj/InfoPlist.strings)
 obsolete_resources=(en.lproj/ServicesMenu.strings ko.lproj/ServicesMenu.strings)
@@ -90,21 +92,24 @@ for file in Info.plist document.wflow Resources/en.lproj/InfoPlist.strings Resou
   cp "$merge_source/Contents/$file" "$stage/merge/Contents/$file"
 done
 ln -s "$root" "$stage/merge/Contents/project"
-# Build the Cocoa review application using only macOS's built-in compiler.
-# Compilation failure is detected while every installed bundle is untouched.
-cat "$root/review-model.js" "$root/document-review.js" > "$stage/review.js"
-/usr/bin/osacompile -l JavaScript -o "$stage/Contents/Resources/$review_name" "$stage/review.js"
-/usr/libexec/PlistBuddy -c 'Add :CFBundleIdentifier string com.wonjun-lab.finder-pdf-converter.review' "$stage/Contents/Resources/$review_name/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c 'Set :CFBundleDevelopmentRegion en' "$stage/Contents/Resources/$review_name/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c 'Add :CFBundleLocalizations array' "$stage/Contents/Resources/$review_name/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c 'Add :CFBundleLocalizations:0 string en' "$stage/Contents/Resources/$review_name/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c 'Add :CFBundleLocalizations:1 string ko' "$stage/Contents/Resources/$review_name/Contents/Info.plist"
-printf '%s' "$root" > "$stage/Contents/Resources/$review_name/Contents/Resources/finder-pdf-owner"
-(cd "$root" && /usr/bin/shasum -a 256 review-model.js document-review.js) > "$stage/Contents/Resources/$review_name/Contents/Resources/finder-pdf-sources.sha256"
-/usr/bin/codesign --force --sign - "$stage/Contents/Resources/$review_name"
-# Inventory every generated file by relative path; generated app bytes are not
-# tracked in git. Extra, changed, linked, or special entries block replacement.
-(cd "$stage/Contents/Resources/$review_name" && /usr/bin/find -s . -type f -exec /usr/bin/shasum -a 256 {} \;) > "$stage/Contents/Resources/$review_inventory"
+# Compile both native hosts before touching an installation. Each owns its
+# source hash, install owner marker, signature, and complete file inventory.
+for ((index=0; index<${#app_names[@]}; index++)); do
+  app_name=${app_names[$index]}
+  app="$stage/Contents/Resources/$app_name"
+  read -r -a sources <<< "${app_sources[$index]}"
+  cat "${sources[@]/#/$root/}" > "$stage/app.js"
+  /usr/bin/osacompile -l JavaScript -o "$app" "$stage/app.js"
+  /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.wonjun-lab.finder-pdf-converter.${app_identifiers[$index]}" "$app/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c 'Set :CFBundleDevelopmentRegion en' "$app/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c 'Add :CFBundleLocalizations array' "$app/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c 'Add :CFBundleLocalizations:0 string en' "$app/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c 'Add :CFBundleLocalizations:1 string ko' "$app/Contents/Info.plist"
+  printf '%s' "$root" > "$app/Contents/Resources/finder-pdf-owner"
+  (cd "$root" && /usr/bin/shasum -a 256 "${sources[@]}") > "$app/Contents/Resources/finder-pdf-sources.sha256"
+  /usr/bin/codesign --force --sign - "$app"
+  (cd "$app" && /usr/bin/find -s . -type f -exec /usr/bin/shasum -a 256 {} \;) > "$stage/Contents/Resources/${app_inventories[$index]}"
+done
 
 # Reject foreign or redirected print bundles before modifying the converter.
 if [ -e "$print_target" ] || [ -L "$print_target" ]; then
@@ -193,19 +198,24 @@ if [ ! -L "$target" ] && [ -d "$target" ] && [ ! -L "$target/Contents" ] && [ -d
       exit 1
     fi
   done
-  review_installed="$target/Contents/Resources/$review_name"
-  inventory_installed="$target/Contents/Resources/$review_inventory"
-  if [ -e "$review_installed" ] || [ -L "$review_installed" ] || [ -e "$inventory_installed" ] || [ -L "$inventory_installed" ]; then
-    if [ -L "$review_installed" ] || [ ! -d "$review_installed" ] || [ -L "$inventory_installed" ] || [ ! -f "$inventory_installed" ] ||
-       [ -n "$(/usr/bin/find "$review_installed" ! -type f ! -type d -print)" ] ||
-       ! cmp -s "$review_installed/Contents/Resources/finder-pdf-owner" "$stage/Contents/Resources/$review_name/Contents/Resources/finder-pdf-owner"; then
-      printf '%s\n' '검토 앱이 없거나 소유권·파일 형식이 바뀌어 설치하지 않았습니다.' >&2; exit 1
+  # A pre-print-host installation can lack the new app entirely. Any existing
+  # member must be the intact app installed by this exact source folder.
+  for ((index=0; index<${#app_names[@]}; index++)); do
+    app_installed="$target/Contents/Resources/${app_names[$index]}"
+    inventory_installed="$target/Contents/Resources/${app_inventories[$index]}"
+    if [ -e "$app_installed" ] || [ -L "$app_installed" ] || [ -e "$inventory_installed" ] || [ -L "$inventory_installed" ]; then
+      if [ -L "$app_installed" ] || [ ! -d "$app_installed" ] || [ -L "$inventory_installed" ] || [ ! -f "$inventory_installed" ] ||
+         [ -n "$(/usr/bin/find "$app_installed" ! -type f ! -type d -print)" ] ||
+         ! cmp -s "$app_installed/Contents/Resources/finder-pdf-owner" "$stage/Contents/Resources/${app_names[$index]}/Contents/Resources/finder-pdf-owner" ||
+         ! /usr/bin/codesign --verify --strict "$app_installed" >/dev/null 2>&1; then
+        printf '%s\n' "생성 앱의 소유권·파일 형식·서명이 바뀌어 설치하지 않았습니다: ${app_names[$index]}" >&2; exit 1
+      fi
+      (cd "$app_installed" && /usr/bin/find -s . -type f -exec /usr/bin/shasum -a 256 {} \;) > "$stage/existing-app.sha256"
+      if ! cmp -s "$inventory_installed" "$stage/existing-app.sha256"; then
+        printf '%s\n' "생성 앱 내용이 바뀌어 설치하지 않았습니다: ${app_names[$index]}" >&2; exit 1
+      fi
     fi
-    (cd "$review_installed" && /usr/bin/find -s . -type f -exec /usr/bin/shasum -a 256 {} \;) > "$stage/existing-review.sha256"
-    if ! cmp -s "$inventory_installed" "$stage/existing-review.sha256"; then
-      printf '%s\n' '검토 앱 내용이 바뀌어 설치하지 않았습니다.' >&2; exit 1
-    fi
-  fi
+  done
   mkdir -p "$target/Contents/Resources"
   for file in "${obsolete_resources[@]}"; do
     if [ -f "$target/Contents/Resources/$file" ]; then
@@ -215,9 +225,12 @@ if [ ! -L "$target" ] && [ -d "$target" ] && [ ! -L "$target/Contents" ] && [ -d
   for file in "${resources[@]}"; do
     mv -f "$stage/Contents/Resources/$file" "$target/Contents/Resources/$file"
   done
-  if [ -d "$review_installed" ]; then mv "$review_installed" "$stage/previous-review.app"; fi
-  mv "$stage/Contents/Resources/$review_name" "$target/Contents/Resources/$review_name"
-  mv -f "$stage/Contents/Resources/$review_inventory" "$target/Contents/Resources/$review_inventory"
+  for ((index=0; index<${#app_names[@]}; index++)); do
+    app_installed="$target/Contents/Resources/${app_names[$index]}"
+    if [ -d "$app_installed" ]; then mv "$app_installed" "$stage/previous-${app_identifiers[$index]}.app"; fi
+    mv "$stage/Contents/Resources/${app_names[$index]}" "$app_installed"
+    mv -f "$stage/Contents/Resources/${app_inventories[$index]}" "$target/Contents/Resources/${app_inventories[$index]}"
+  done
   for directory in "${localizations[@]}"; do
     mkdir -p "$target/Contents/Resources/$directory"
   done

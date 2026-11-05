@@ -3,9 +3,11 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 
 REPO = Path(__file__).resolve().parents[1]
+INSTALLER = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else REPO / 'install.sh'
 checks = []
 
 
@@ -14,12 +16,18 @@ def check(condition, description):
     checks.append((bool(condition), description))
 
 
+def require(condition, description):
+    """Stop before cleanup can hide a destructive replacement of a new fixture."""
+    check(condition, description)
+    assert condition, description
+
+
 with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
     base = Path(temp).resolve()
     source = base / "source ' $ checkout"
     source.mkdir()
-    for name in ['install.sh', 'locale.sh', 'preferred-language.js', 'convert.sh', 'conversion-session.sh', 'conversion-session.js', 'conversion-status.js', 'hancom.applescript', 'word.applescript', 'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js', 'print-fit.sh', 'print-fit.js', 'review-model.js', 'document-review.js']:
-        shutil.copy2(REPO / name, source / name)
+    for name in ['install.sh', 'locale.sh', 'preferred-language.js', 'convert.sh', 'conversion-session.sh', 'conversion-session.js', 'conversion-status.js', 'hancom.applescript', 'word.applescript', 'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js', 'text.js', 'markdown.js', 'csv.js', 'print-fit.sh', 'print-fit.js', 'print-panel.js', 'review-model.js', 'document-review.js']:
+        shutil.copy2(INSTALLER if name == 'install.sh' else REPO / name, source / name)
     shutil.copytree(REPO / 'PDF로 변환.workflow', source / 'PDF로 변환.workflow')
     shutil.copytree(REPO / '용지에 맞춰 인쇄.workflow', source / '용지에 맞춰 인쇄.workflow')
 
@@ -72,6 +80,39 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
     (source / 'document-review.js').write_text('function run( { syntax error')
     check(run(home).returncode != 0 and (resources / 'convert.sh').read_bytes() == before, 'review compilation failure leaves installed resources unchanged')
     (source / 'document-review.js').write_bytes(original_js)
+    print_app = resources / 'Finder PDF Print.app'
+    require((print_app / 'Contents/MacOS/applet').is_file() and (resources / 'print-app.sha256').is_file(), 'native print host and independent inventory installed')
+    require(subprocess.run(['/usr/bin/codesign', '--verify', '--strict', str(print_app)], capture_output=True).returncode == 0, 'native print host signature valid')
+    stable_converter = (resources / 'convert.sh').read_bytes()
+    print_info = print_app / 'Contents/Info.plist'
+    original_print_info = print_info.read_bytes()
+    print_info.write_bytes(original_print_info + b'\n')
+    require(run(home).returncode != 0 and print_info.read_bytes() == original_print_info + b'\n' and (resources / 'convert.sh').read_bytes() == stable_converter, 'modified print host blocks entire update without changes')
+    print_info.write_bytes(original_print_info)
+    owner = print_app / 'Contents/Resources/finder-pdf-owner'
+    original_owner = owner.read_bytes()
+    owner.write_text('/foreign/source')
+    require(run(home).returncode != 0 and owner.read_text() == '/foreign/source' and (resources / 'convert.sh').read_bytes() == stable_converter, 'foreign print host owner blocks entire update')
+    owner.write_bytes(original_owner)
+    extra = print_app / 'Contents/Resources/unrelated.txt'
+    extra.write_text('print sentinel')
+    require(run(home).returncode != 0 and extra.read_text() == 'print sentinel', 'extra print host file blocks replacement')
+    extra.unlink()
+    original_app = resources / 'owned-print.app'
+    print_app.rename(original_app)
+    print_app.symlink_to(original_app, target_is_directory=True)
+    require(run(home).returncode != 0 and print_app.is_symlink() and (resources / 'convert.sh').read_bytes() == stable_converter, 'symlink print host blocks entire update')
+    print_app.unlink()
+    original_app.rename(print_app)
+    require(run(home).returncode == 0, 'unchanged owned print host can be upgraded')
+    # An installation from before this host existed remains a valid upgrade.
+    shutil.rmtree(print_app)
+    (resources / 'print-app.sha256').unlink()
+    require(run(home).returncode == 0 and print_app.is_dir(), 'legacy review-only installation gains print host')
+    original_panel_source = (source / 'print-panel.js').read_bytes()
+    (source / 'print-panel.js').write_text('function run( { syntax error')
+    require(run(home).returncode != 0 and (resources / 'convert.sh').read_bytes() == stable_converter, 'print compilation failure leaves installed resources unchanged')
+    (source / 'print-panel.js').write_bytes(original_panel_source)
     conflict_home = base / 'merge-conflict-home'
     foreign = conflict_home / 'Library/Services/PDF 합치기.workflow'
     foreign.mkdir(parents=True)
@@ -172,7 +213,7 @@ with tempfile.TemporaryDirectory(prefix='fpdf-install-') as temp:
 
     # Every added resource participates in preflight and destination checks;
     # a missing helper must not partially replace an existing installation.
-    for helper in ('conversion-session.sh', 'conversion-session.js', 'conversion-status.js', 'csv.js', 'excel.applescript', 'dng.js', 'locale.sh', 'preferred-language.js', 'print-fit.sh', 'print-fit.js', 'review-model.js', 'document-review.js'):
+    for helper in ('conversion-session.sh', 'conversion-session.js', 'conversion-status.js', 'csv.js', 'excel.applescript', 'dng.js', 'locale.sh', 'preferred-language.js', 'print-fit.sh', 'print-fit.js', 'print-panel.js', 'review-model.js', 'document-review.js'):
         installed_before = (resources / 'convert.sh').read_bytes()
         (source / helper).rename(source / (helper + '.hidden'))
         result = run(home)

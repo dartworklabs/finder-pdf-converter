@@ -47,7 +47,7 @@ bash ./install.sh
 
 When you see `설치했습니다:` (“Installed:”) followed by a path, installation is complete. No administrator access or `sudo` is required.
 
-The installer copies three Quick Actions to `~/Library/Services/PDF로 변환.workflow`, `~/Library/Services/용지에 맞춰 인쇄.workflow`, and `~/Library/Services/PDF 합치기.workflow`. It compiles the review application with macOS’s built-in tools before updating any installed files. The shared executables are kept in the conversion bundle, so keep that bundle installed when using Print to Fit or Merge PDFs. It will not overwrite an unrelated item with any of these names. It **only updates an installation made from the same source folder at the same absolute path**. It also refuses to update an installation whose folder or executables have been replaced with symbolic links.
+The installer copies three Quick Actions to `~/Library/Services/PDF로 변환.workflow`, `~/Library/Services/용지에 맞춰 인쇄.workflow`, and `~/Library/Services/PDF 합치기.workflow`. It compiles the review and print applications with macOS’s built-in tools before updating any installed files. Neither Xcode nor an additional runtime is needed. The shared executables are kept in the conversion bundle, so keep that bundle installed when using Print to Fit or Merge PDFs. It will not overwrite an unrelated item with any of these names. It **only updates an installation made from the same source folder at the same absolute path**. It also refuses to update an installation whose folder or executables have been replaced with symbolic links.
 
 ### 3. Enable it in Finder
 
@@ -90,7 +90,7 @@ In Terminal, open the folder containing `install.sh` and run:
 bash ./doctor.sh
 ```
 
-This compares all three Quick Actions and the current source folder's shared executables with the installed copies, byte for byte. It also checks the generated review app’s ownership, file inventory, and source hashes. It does not change files or launch apps, and it does not print your actual home-directory path or email addresses. Exit codes are `0` if all files match, `1` for a missing installation, differing contents, or a read failure, and `2` for a non-macOS system or invalid execution conditions. See [Install](#install) and [Update](#update) if the installation needs attention.
+This compares all three Quick Actions and the current source folder's shared executables with the installed copies, byte for byte. It also checks each generated app’s ownership, file inventory, source hashes, and signature. It does not change files or launch apps, and it does not print your actual home-directory path or email addresses. Exit codes are `0` if all files match, `1` for a missing installation, differing contents, or a read failure, and `2` for a non-macOS system or invalid execution conditions. See [Install](#install) and [Update](#update) if the installation needs attention.
 
 The check looks for Hancom HWP, Word, PowerPoint, and Excel under their standard app names in `/Applications` and `~/Applications`. Missing apps do not affect the exit code; check manually if you installed them elsewhere. This check does not verify app startup, licensing, macOS permissions, or actual conversion. Complete the [PNG check](#4-try-a-single-png) as well.
 
@@ -111,7 +111,7 @@ Each page is reduced only when needed to fit the selected printer’s printable 
 
 The initial document order comes from Finder. Printing follows the order and page selections accepted in the review window. Identical file names are prepared separately. PDFs are read from private copies; other formats are converted using the same apps and limits described below. Save unsaved edits before starting. Unsupported, unreadable, symbolic-link, folder, or invalid inputs stop the entire batch before a print panel opens. Preparation shows the current file, overall progress, and each result. If conversion or PDF validation fails, repair and save the failed original, then choose **Retry Failed**. Only failed inputs are reread; successful private copies stay unchanged. Review opens only after every input is ready. Cancelling preparation creates no print job. Closing a preparation failure result finishes the action without a second Finder error.
 
-Print to Fit creates no PDF beside a source and never uses an existing adjacent PDF as a substitute for converting that source. Temporary copies and intermediate PDFs are removed when the action closes, including cancellation or a failed preparation that you close. Its preparation errors follow the same Finder/macOS language selection as conversion results. The review window and native save panel use the selected Finder/macOS language. The native print panel follows macOS’s own language settings.
+Print to Fit creates no PDF beside a source and never uses an existing adjacent PDF as a substitute for converting that source. Temporary copies and intermediate PDFs are removed when the action closes, including cancellation or a failed preparation that you close. Its preparation errors follow the same Finder/macOS language selection as conversion results. The review window and native save panel use the selected Finder/macOS language. A separate **Finder PDF Print** app opens the native print panel using the selected Finder/macOS language. The app closes after Print or Cancel, and temporary files remain available until it closes.
 
 For a first check, select a PDF you can recognize, open Print to Fit, check the printer and paper settings, then cancel. For a small physical test, select a single-page document, open Print to Fit, choose the intended printer and paper, and print it. A proof PDF check alone does not verify paper feed or the physical printer’s output.
 
@@ -205,7 +205,7 @@ Exit codes are `0` when all files succeed or are skipped, `1` when any file fail
 bash "$HOME/Library/Services/PDF로 변환.workflow/Contents/Resources/print-fit.sh" -- "/absolute/path/report.pdf" "/absolute/path/photo.heic"
 ```
 
-Use the installed entry above for interactive review: it has the compiled helper beside it. This opens the same review window and print panel as Finder. `--no-dialog` suppresses error alerts, but keeps the preparation, review, and print windows. To exercise conversion and the same page renderer without submitting a physical job, give a new proof PDF path:
+Use the installed entry above for interactive review: it has the compiled review and print apps beside it. This opens the same review window and print panel as Finder. `--no-dialog` suppresses error alerts, but keeps the preparation, review, and print windows. To exercise conversion and the same page renderer without submitting a physical job, give a new proof PDF path:
 
 ```sh
 bash ./print-fit.sh --proof "/absolute/path/new-proof.pdf" -- "/absolute/path/report.pdf" "/absolute/path/report.docx"
@@ -221,7 +221,7 @@ bash ./print-fit.sh --merge --output "/absolute/path/new-merged.pdf" -- "/absolu
 
 `--merge --output` merges all pages without opening windows and needs no printer. Omit `--output` and use the installed entry to open the merge review window instead. `--proof` stays noninteractive and uses printer sizing; it cannot be combined with `--merge` or `--output`.
 
-For automated checks, add `--selection "/absolute/path/selection.json"` to a proof or an explicit merge output. The UTF-8 JSON format is `{"version":1,"cancelled":false,"files":[{"index":1,"pages":[2,1]},{"index":0,"pages":[1]}]}`. Indices refer to the zero-based input order; pages are one-based and emitted in the listed order. Every included document and page must appear at most once. Invalid selections reject the whole batch. These noninteractive modes work directly from the checkout without a compiled review app.
+For automated checks, add `--selection "/absolute/path/selection.json"` to a proof or an explicit merge output. The UTF-8 JSON format is `{"version":1,"cancelled":false,"files":[{"index":1,"pages":[2,1]},{"index":0,"pages":[1]}]}`. Indices refer to the zero-based input order; pages are one-based and emitted in the listed order. Every included document and page must appear at most once. Invalid selections reject the whole batch. These noninteractive modes work directly from the checkout without either compiled app.
 
 ## Verify progress and retry
 
@@ -233,9 +233,12 @@ python3 verification/verify-refresh-messages.py
 python3 verification/verify-session-lifecycle.py
 node verification/verify-progress-ui.js
 python3 verification/verify-preparation-entry.py
+python3 verification/verify-print-host-entry.py
+python3 verification/verify-print-panel.py
+python3 verification/verify-print-capture.py
 ```
 
-These checks use disposable files and owned adapters; they do not submit physical print jobs. Python 3 and Node.js are required. Installation, diagnostic, native proof and manual Finder checks are listed in the verification record.
+These automated checks use disposable files and owned adapters; they do not submit physical print jobs. Python 3 and Node.js are required for verification only. Actual Finder Print and Cancel passed in English and Korean; two jobs were captured by an owned virtual printer, and their page order, shrink-only fit and corner marks were verified. Physical paper output remains unverified. The [verification record](verification/PROGRESS.md#dedicated-native-print-panel-and-captured-output) includes the capture procedure and offline verifier; only that offline PDF verifier additionally requires test-only PyMuPDF.
 
 ## License
 

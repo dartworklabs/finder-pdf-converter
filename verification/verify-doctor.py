@@ -3,12 +3,14 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 
 REPO = Path(__file__).resolve().parents[1]
+DOCTOR = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else REPO / 'doctor.sh'
 HELPERS = ('locale.sh', 'preferred-language.js', 'convert.sh', 'conversion-session.sh', 'conversion-session.js', 'conversion-status.js', 'hancom.applescript', 'word.applescript',
            'powerpoint.applescript', 'excel.applescript', 'image.js', 'dng.js',
-           'text.js', 'markdown.js', 'csv.js', 'print-fit.sh', 'print-fit.js', 'review-model.js', 'document-review.js')
+           'text.js', 'markdown.js', 'csv.js', 'print-fit.sh', 'print-fit.js', 'print-panel.js', 'review-model.js', 'document-review.js')
 
 
 def snapshot(folder):
@@ -25,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix='fpdf-doctor-') as temp:
     def run(expected, label, *args):
         """Assert the public exit code, privacy, and absence of filesystem writes."""
         before = snapshot(home)
-        result = subprocess.run(['/bin/bash', str(REPO / 'doctor.sh'), *args],
+        result = subprocess.run(['/bin/bash', str(DOCTOR), *args],
                                 env={**os.environ, 'HOME': str(home)},
                                 capture_output=True, text=True)
         assert result.returncode == expected, (label, result.returncode, result.stdout, result.stderr)
@@ -51,6 +53,23 @@ with tempfile.TemporaryDirectory(prefix='fpdf-doctor-') as temp:
     review_info.write_bytes(original_review_info + b'\n')
     run(1, 'modified compiled review app rejected without writes')
     review_info.write_bytes(original_review_info)
+    print_app = resources / 'Finder PDF Print.app'
+    print_info = print_app / 'Contents/Info.plist'
+    original_print_info = print_info.read_bytes()
+    print_info.write_bytes(original_print_info + b'\n')
+    run(1, 'modified compiled print app rejected without writes')
+    print_info.write_bytes(original_print_info)
+    original_app = resources / 'owned-print.app'
+    print_app.rename(original_app)
+    print_app.symlink_to(original_app, target_is_directory=True)
+    run(1, 'linked print app rejected without writes')
+    print_app.unlink()
+    original_app.rename(print_app)
+    print_source_hash = print_app / 'Contents/Resources/finder-pdf-sources.sha256'
+    original_hash = print_source_hash.read_bytes()
+    print_source_hash.write_text('stale source hash')
+    run(1, 'stale print app source hash rejected without writes')
+    print_source_hash.write_bytes(original_hash)
     merge_workflow = home / 'Library/Services/PDF 합치기.workflow/Contents/document.wflow'
     original_merge_workflow = merge_workflow.read_bytes()
     merge_workflow.write_text('stale merge workflow')

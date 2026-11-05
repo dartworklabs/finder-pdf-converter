@@ -17,7 +17,7 @@ if [ -z "${HOME:-}" ]; then
 fi
 root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 target="$HOME/Library/Services/PDF로 변환.workflow"
-resources=(locale.sh preferred-language.js convert.sh conversion-session.sh conversion-session.js conversion-status.js hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js print-fit.sh print-fit.js review-model.js document-review.js)
+resources=(locale.sh preferred-language.js convert.sh conversion-session.sh conversion-session.js conversion-status.js hancom.applescript word.applescript powerpoint.applescript excel.applescript image.js dng.js text.js markdown.js csv.js print-fit.sh print-fit.js print-panel.js review-model.js document-review.js)
 status=0
 printf '%s\n' '확인: macOS'
 
@@ -83,20 +83,27 @@ else
   done
 fi
 
-# The generated app is checked against its install-time inventory and the exact
-# current sources, without recompiling, launching, or writing diagnostic files.
-review="$target/Contents/Resources/Finder PDF Review.app"
-inventory="$target/Contents/Resources/review-app.sha256"
-if [ -L "$review" ] || [ ! -d "$review" ] || [ -L "$inventory" ] || [ ! -f "$inventory" ] ||
-   [ -n "$(/usr/bin/find "$review" ! -type f ! -type d -print 2>/dev/null)" ] ||
-   ! cmp -s "$review/Contents/Resources/finder-pdf-owner" <(printf '%s' "$root") ||
-   ! cmp -s "$inventory" <(cd "$review" && /usr/bin/find -s . -type f -exec /usr/bin/shasum -a 256 {} \; 2>/dev/null) ||
-   ! cmp -s "$review/Contents/Resources/finder-pdf-sources.sha256" <(cd "$root" && /usr/bin/shasum -a 256 review-model.js document-review.js 2>/dev/null); then
-  printf '%s\n' '설치 확인 필요: 검토 앱 없음·소유권·내용·원본 차이'
-  status=1
-else
-  printf '%s\n' '일치: 검토 앱과 원본 해시'
-fi
+# Inspect each generated host's exact inventory, source hashes, and signature
+# without recompiling, launching, or writing diagnostic files.
+app_names=("Finder PDF Review.app" "Finder PDF Print.app")
+app_inventories=(review-app.sha256 print-app.sha256)
+app_sources=("review-model.js document-review.js" "print-fit.js print-panel.js")
+for ((index=0; index<${#app_names[@]}; index++)); do
+  app="$target/Contents/Resources/${app_names[$index]}"
+  inventory="$target/Contents/Resources/${app_inventories[$index]}"
+  read -r -a sources <<< "${app_sources[$index]}"
+  if [ -L "$app" ] || [ ! -d "$app" ] || [ -L "$inventory" ] || [ ! -f "$inventory" ] ||
+     [ -n "$(/usr/bin/find "$app" ! -type f ! -type d -print 2>/dev/null)" ] ||
+     ! cmp -s "$app/Contents/Resources/finder-pdf-owner" <(printf '%s' "$root") ||
+     ! cmp -s "$inventory" <(cd "$app" && /usr/bin/find -s . -type f -exec /usr/bin/shasum -a 256 {} \; 2>/dev/null) ||
+     ! cmp -s "$app/Contents/Resources/finder-pdf-sources.sha256" <(cd "$root" && /usr/bin/shasum -a 256 "${sources[@]}" 2>/dev/null) ||
+     ! /usr/bin/codesign --verify --strict "$app" >/dev/null 2>&1; then
+    printf '설치 확인 필요: 생성 앱 없음·소유권·내용·원본·서명 차이 — %s\n' "${app_names[$index]}"
+    status=1
+  else
+    printf '일치: 생성 앱과 원본 해시·서명 — %s\n' "${app_names[$index]}"
+  fi
+done
 
 # Check the separately registered merge action and its localized metadata.
 merge_target="$HOME/Library/Services/PDF 합치기.workflow"
