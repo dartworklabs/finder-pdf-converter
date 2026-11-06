@@ -611,7 +611,9 @@ def test_managed_cli_refusal(home: Path) -> None:
     print("PASS: managed source rejects legacy CLI without writes", flush=True)
 
 
-def test_registration_failure(base: Path, payload: Path) -> None:
+def test_registration_failure(
+    base: Path, payload: Path, *, hosted_full: bool = False
+) -> None:
     """A registration failure reports installed files without claiming menu readiness."""
     home = base / "registration-failure-home"
     home.mkdir()
@@ -625,7 +627,12 @@ def test_registration_failure(base: Path, payload: Path) -> None:
         verify_installed(home)
         assert not (support(home) / "transaction").exists()
         inspect_unchanged(home, payload, {"current"})
-        crashed = invoke(home, payload, "install", fault="committed", crash=True)
+        if hosted_full:
+            print(f"BUDGET registration {failure} committed crash install 240s", flush=True)
+        crashed = invoke(
+            home, payload, "install", fault="committed", crash=True,
+            timeout=240 if hosted_full else 120,
+        )
         assert crashed.returncode != 0
         before = live_snapshot(home)
         value = inspect_unchanged(home, payload, {"recovery-required"})
@@ -1387,7 +1394,11 @@ def main() -> None:
         print(f"TIMING contract {time.monotonic() - started:.3f}s", flush=True)
         if mode == "all":
             started = time.monotonic()
-            test_registration_failure(base, payload)
+            test_registration_failure(
+                base, payload,
+                hosted_full=hosted_full
+                and os.environ.get("FINDER_PDF_HOSTED_FULL_REGISTRATION_TIMEOUT") == "1",
+            )
             test_all_backup_preflight(home, payload)
             print(
                 f"TIMING registration-and-finalization {time.monotonic() - started:.3f}s",
