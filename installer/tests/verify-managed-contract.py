@@ -523,7 +523,9 @@ def test_payload_rejection(base: Path, payload: Path) -> None:
     )
 
 
-def test_legacy(base: Path, payload: Path) -> None:
+def test_legacy(
+    base: Path, payload: Path, *, hosted_full: bool = False
+) -> None:
     """Adopt only a fully verified legacy source and preserve missing-source installs."""
     home = base / "legacy-home"
     home.mkdir()
@@ -578,7 +580,11 @@ def test_legacy(base: Path, payload: Path) -> None:
     finally:
         unavailable.rename(legacy)
     source_before = snapshot(legacy)
-    expect(home, payload, "install", {"installed"})
+    if hosted_full:
+        print("BUDGET verified legacy adoption install 240s", flush=True)
+    expect(
+        home, payload, "install", {"installed"}, timeout=240 if hosted_full else 120
+    )
     assert not executed.exists(), "adoption executed a legacy source's script"
     verify_installed(home)
     assert snapshot(legacy) == source_before, "adoption changed legacy source"
@@ -1359,16 +1365,23 @@ def main() -> None:
         test_malformed_requests(base, payload)
         hosted_full = (
             mode == "all"
-            and os.environ.get("FINDER_PDF_HOSTED_FULL_UPDATE_TIMEOUT") == "1"
             and os.environ.get("CI") == "true"
             and os.environ.get("GITHUB_ACTIONS") == "true"
             and os.environ.get("RUNNER_OS") == "macOS"
             and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
         )
-        home = test_download_independence(base, payload, hosted_full=hosted_full)
+        home = test_download_independence(
+            base, payload,
+            hosted_full=hosted_full
+            and os.environ.get("FINDER_PDF_HOSTED_FULL_UPDATE_TIMEOUT") == "1",
+        )
         test_conflicts(base, payload, home)
         test_payload_rejection(base, payload)
-        test_legacy(base, payload)
+        test_legacy(
+            base, payload,
+            hosted_full=hosted_full
+            and os.environ.get("FINDER_PDF_HOSTED_FULL_LEGACY_TIMEOUT") == "1",
+        )
         test_managed_cli_refusal(home)
         test_managed_receipt_tampering(home, payload)
         print(f"TIMING contract {time.monotonic() - started:.3f}s", flush=True)
