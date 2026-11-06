@@ -612,14 +612,21 @@ def test_managed_cli_refusal(home: Path) -> None:
 
 
 def test_registration_failure(
-    base: Path, payload: Path, *, hosted_full: bool = False
+    base: Path, payload: Path, *, hosted_full: bool = False,
+    hosted_update_preparation: bool = False,
 ) -> None:
     """A registration failure reports installed files without claiming menu readiness."""
     home = base / "registration-failure-home"
     home.mkdir()
     for failure in ("flush", "update"):
+        extended_preparation = hosted_update_preparation and failure == "update"
+        if extended_preparation:
+            print("BUDGET registration update preparation install 240s", flush=True)
         value = outcome(
-            invoke(home, payload, "install", registration_failure=failure),
+            invoke(
+                home, payload, "install", registration_failure=failure,
+                timeout=240 if extended_preparation else 120,
+            ),
             "install",
             {"registration-required"},
         )
@@ -1398,6 +1405,8 @@ def main() -> None:
                 base, payload,
                 hosted_full=hosted_full
                 and os.environ.get("FINDER_PDF_HOSTED_FULL_REGISTRATION_TIMEOUT") == "1",
+                hosted_update_preparation=hosted_full
+                and os.environ.get("FINDER_PDF_HOSTED_FULL_REGISTRATION_UPDATE_PREPARATION_TIMEOUT") == "1",
             )
             test_all_backup_preflight(home, payload)
             print(

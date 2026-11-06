@@ -38,6 +38,7 @@ jobs:
           FINDER_PDF_HOSTED_FULL_UPDATE_TIMEOUT: "1"
           FINDER_PDF_HOSTED_FULL_LEGACY_TIMEOUT: "1"
           FINDER_PDF_HOSTED_FULL_REGISTRATION_TIMEOUT: "1"
+          FINDER_PDF_HOSTED_FULL_REGISTRATION_UPDATE_PREPARATION_TIMEOUT: "1"
         run: python3 verification/ci/check.py full "$RUNNER_TEMP/full-backend.log"
       - name: Preserve synthetic fixture evidence
         if: always()
