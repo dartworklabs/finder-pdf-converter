@@ -168,6 +168,7 @@ def invoke(
     fault: Optional[str] = None,
     crash: bool = False,
     registration_failure: Optional[str] = None,
+    timeout: int = 120,
 ) -> subprocess.CompletedProcess[str]:
     """Call the real public backend with registration explicitly replaced."""
     environment = {**os.environ, "HOME": str(home), "FINDER_PDF_TEST_NO_REGISTER": "1"}
@@ -192,7 +193,7 @@ def invoke(
         check=False,
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=timeout,
     )
 
 
@@ -269,9 +270,12 @@ def expect(
     kinds: set[str],
     *,
     fault: Optional[str] = None,
+    timeout: int = 120,
 ) -> dict[str, Any]:
     """Require one public outcome while preserving the complete diagnostic on failure."""
-    return outcome(invoke(home, payload, operation, fault=fault), operation, kinds)
+    return outcome(
+        invoke(home, payload, operation, fault=fault, timeout=timeout), operation, kinds
+    )
 
 
 def inspect_unchanged(home: Path, payload: Path, kinds: set[str]) -> dict[str, Any]:
@@ -350,7 +354,9 @@ def refusal_preserves(home: Path, payload: Path) -> None:
     assert snapshot(home) == before, "refused install changed the user's filesystem"
 
 
-def test_download_independence(base: Path, payload: Path) -> Path:
+def test_download_independence(
+    base: Path, payload: Path, *, hosted_full: bool = False
+) -> Path:
     """Install, delete the first download, and update from a differently named copy."""
     home = base / "한글 'quoted' $ user\n"
     home.mkdir()
@@ -366,7 +372,11 @@ def test_download_independence(base: Path, payload: Path) -> Path:
         changed = moved / "convert.sh"
         changed.write_bytes(changed.read_bytes() + b"\n# contract-test update\n")
         inspect_unchanged(home, moved, {"update"})
-        expect(home, moved, "install", {"installed"})
+        if hosted_full:
+            print("BUDGET moved-download update install 240s", flush=True)
+        expect(
+            home, moved, "install", {"installed"}, timeout=240 if hosted_full else 120
+        )
         assert (
             support(home) / "source/convert.sh"
         ).read_bytes() == changed.read_bytes()
@@ -513,7 +523,9 @@ def test_payload_rejection(base: Path, payload: Path) -> None:
     )
 
 
-def test_legacy(base: Path, payload: Path) -> None:
+def test_legacy(
+    base: Path, payload: Path, *, hosted_full: bool = False
+) -> None:
     """Adopt only a fully verified legacy source and preserve missing-source installs."""
     home = base / "legacy-home"
     home.mkdir()
@@ -568,7 +580,11 @@ def test_legacy(base: Path, payload: Path) -> None:
     finally:
         unavailable.rename(legacy)
     source_before = snapshot(legacy)
-    expect(home, payload, "install", {"installed"})
+    if hosted_full:
+        print("BUDGET verified legacy adoption install 240s", flush=True)
+    expect(
+        home, payload, "install", {"installed"}, timeout=240 if hosted_full else 120
+    )
     assert not executed.exists(), "adoption executed a legacy source's script"
     verify_installed(home)
     assert snapshot(legacy) == source_before, "adoption changed legacy source"
@@ -595,13 +611,22 @@ def test_managed_cli_refusal(home: Path) -> None:
     print("PASS: managed source rejects legacy CLI without writes", flush=True)
 
 
-def test_registration_failure(base: Path, payload: Path) -> None:
+def test_registration_failure(
+    base: Path, payload: Path, *, hosted_full: bool = False,
+    hosted_update_preparation: bool = False,
+) -> None:
     """A registration failure reports installed files without claiming menu readiness."""
     home = base / "registration-failure-home"
     home.mkdir()
     for failure in ("flush", "update"):
+        extended_preparation = hosted_update_preparation and failure == "update"
+        if extended_preparation:
+            print("BUDGET registration update preparation install 240s", flush=True)
         value = outcome(
-            invoke(home, payload, "install", registration_failure=failure),
+            invoke(
+                home, payload, "install", registration_failure=failure,
+                timeout=240 if extended_preparation else 120,
+            ),
             "install",
             {"registration-required"},
         )
@@ -609,7 +634,12 @@ def test_registration_failure(base: Path, payload: Path) -> None:
         verify_installed(home)
         assert not (support(home) / "transaction").exists()
         inspect_unchanged(home, payload, {"current"})
-        crashed = invoke(home, payload, "install", fault="committed", crash=True)
+        if hosted_full:
+            print(f"BUDGET registration {failure} committed crash install 240s", flush=True)
+        crashed = invoke(
+            home, payload, "install", fault="committed", crash=True,
+            timeout=240 if hosted_full else 120,
+        )
         assert crashed.returncode != 0
         before = live_snapshot(home)
         value = inspect_unchanged(home, payload, {"recovery-required"})
@@ -1347,16 +1377,37 @@ def main() -> None:
             return
         started = time.monotonic()
         test_malformed_requests(base, payload)
-        home = test_download_independence(base, payload)
+        hosted_full = (
+            mode == "all"
+            and os.environ.get("CI") == "true"
+            and os.environ.get("GITHUB_ACTIONS") == "true"
+            and os.environ.get("RUNNER_OS") == "macOS"
+            and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
+        )
+        home = test_download_independence(
+            base, payload,
+            hosted_full=hosted_full
+            and os.environ.get("FINDER_PDF_HOSTED_FULL_UPDATE_TIMEOUT") == "1",
+        )
         test_conflicts(base, payload, home)
         test_payload_rejection(base, payload)
-        test_legacy(base, payload)
+        test_legacy(
+            base, payload,
+            hosted_full=hosted_full
+            and os.environ.get("FINDER_PDF_HOSTED_FULL_LEGACY_TIMEOUT") == "1",
+        )
         test_managed_cli_refusal(home)
         test_managed_receipt_tampering(home, payload)
         print(f"TIMING contract {time.monotonic() - started:.3f}s", flush=True)
         if mode == "all":
             started = time.monotonic()
-            test_registration_failure(base, payload)
+            test_registration_failure(
+                base, payload,
+                hosted_full=hosted_full
+                and os.environ.get("FINDER_PDF_HOSTED_FULL_REGISTRATION_TIMEOUT") == "1",
+                hosted_update_preparation=hosted_full
+                and os.environ.get("FINDER_PDF_HOSTED_FULL_REGISTRATION_UPDATE_PREPARATION_TIMEOUT") == "1",
+            )
             test_all_backup_preflight(home, payload)
             print(
                 f"TIMING registration-and-finalization {time.monotonic() - started:.3f}s",

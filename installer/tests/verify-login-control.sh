@@ -51,4 +51,4 @@ for(const menu of [false,true]){
 }
 console.log('management login control: real native off/pending/on clicks invoke intended owned service effect; no real settings/registration/backend passed');
 JXA
-/usr/bin/osascript -l JavaScript "$stage/check.js"
+bash "$root/tests/run-native-applet.sh" "$stage" "$stage/check.js"

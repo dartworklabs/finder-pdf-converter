@@ -263,6 +263,8 @@ For automated checks, add `--selection "/absolute/path/selection.json"` to a pro
 
 ## Verify progress and retry
 
+[CI verification](verification/ci/README.md) describes workflow coverage and the full-backend manual verification policy.
+
 The reproducible checks and the distinction between automated fixtures and actual Finder testing are recorded in [Progress verification](verification/PROGRESS.md). On macOS, run the focused checks from this folder:
 
 ```sh

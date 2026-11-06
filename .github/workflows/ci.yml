@@ -1,0 +1,90 @@
+name: PR verification
+"on":
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: 'bash --noprofile --norc -eo pipefail {0}'
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('{0}-pr-{1}', github.workflow, github.event.pull_request.number) || format('{0}-run-{1}', github.workflow, github.run_id) }}
+  cancel-in-progress: true
+jobs:
+  portable:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26.5.0'
+      - name: Environment and source
+        run: |
+          git rev-parse HEAD HEAD^{tree}
+          uname -a
+          printf 'Image: %s %s\n' "$ImageOS" "$ImageVersion"
+          node --version
+          npm --version
+          python3 --version
+      - name: CI Python static checks
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ci-python"
+          "$RUNNER_TEMP/ci-python/bin/python" -m pip install ruff==0.14.14 mypy==1.19.1
+          "$RUNNER_TEMP/ci-python/bin/ruff" format --check verification/ci/*.py
+          "$RUNNER_TEMP/ci-python/bin/ruff" check verification/ci/*.py
+          "$RUNNER_TEMP/ci-python/bin/mypy" --strict --python-version 3.9 verification/ci/*.py
+      - name: CI integrity
+        run: |
+          python3 verification/ci/test_check.py
+          ruby verification/ci/workflow_policy.rb
+      - name: Model and boundaries
+        run: |
+          python3 verification/ci/check.py fast model
+          python3 verification/ci/check.py fast boundaries
+      - name: Portable conversions and UI models
+        run: |
+          python3 verification/ci/check.py portable-tests
+          python3 verification/ci/check.py fast review
+          python3 verification/ci/check.py fast progress
+      - name: Type and lint
+        run: |
+          npx --yes --package=typescript@7.0.2 tsc --version
+          npx --yes --package=typescript@7.0.2 tsc --project installer/tsconfig.json
+          cd installer
+          npx --yes @biomejs/biome@2.6.5 --version
+          npx --yes @biomejs/biome@2.6.5 lint model.js ui.js tests/verify-model.js tests/verify-management-model.js tests/verify-boundaries.js tests/verify-build.js
+      - name: Tracked shell syntax
+        run: python3 verification/ci/check.py shell
+  native:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26.5.0'
+      - name: Environment and capability
+        run: |
+          git rev-parse HEAD HEAD^{tree}
+          sw_vers
+          uname -m
+          printf 'Image: %s %s\n' "$ImageOS" "$ImageVersion"
+          xcodebuild -version
+          xcrun --show-sdk-version
+          clang --version
+          node --version
+          /usr/bin/python3 --version
+          bash verification/ci/native-probe.sh
+      - name: Package boundary
+        run: python3 verification/ci/check.py fast build
+      - name: Native fixtures
+        env:
+          FINDER_PDF_CI_NATIVE_APPLET: '1'
+        run: python3 verification/ci/check.py fast native
+      - name: Tracked shell syntax
+        run: python3 verification/ci/check.py shell
