@@ -247,6 +247,8 @@ bash ./print-fit.sh --merge --output "/절대/경로/새병합본.pdf" -- "/절�
 
 ## 진행 상황·재시도 검증
 
+[CI 검증 안내](verification/ci/README.md)에서 워크플로의 검사 범위와 백엔드 전체 수동 검증 정책을 확인할 수 있습니다.
+
 자동 검증과 실제 Finder 확인 결과, 재현 명령은 [진행 상황·재시도 검증 기록](verification/PROGRESS.md)에 있습니다. macOS에서 원본 폴더를 연 뒤 다음 명령으로 핵심 동작을 확인할 수 있습니다.
 
 ```sh

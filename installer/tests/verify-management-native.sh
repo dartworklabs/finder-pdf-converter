@@ -315,8 +315,8 @@ try {
 }
 JXA
 result=0
-FPDF_NATIVE_STAGE="$stage" /usr/bin/osascript -l JavaScript "$stage/check.js" > "$stage/result.log" 2>&1 || result=$?
+FPDF_NATIVE_STAGE="$stage" bash "$root/tests/run-native-applet.sh" "$stage" "$stage/check.js" > "$stage/result.log" 2>&1 || result=$?
 cat "$stage/result.log"
 [ "$result" -eq 0 ] || exit "$result"
-# A native termination call can end osascript successfully before the assertions.
+# A native termination call can end the host successfully before the assertions.
 /usr/bin/grep -Fq 'management native: real reopen/inspect ownership' "$stage/result.log"
