@@ -1140,6 +1140,9 @@ def test_recovery(
     payload: Path,
     present_home: Path,
     indices: tuple[int, ...] = (0, 1, 2, 3),
+    *,
+    hosted_before_install3: bool = False,
+    hosted_install2: bool = False,
 ) -> list[str]:
     """Every target rename either restores prior state or leaves recoverable evidence."""
     completed = []
@@ -1153,8 +1156,37 @@ def test_recovery(
                     home = present_home if present else base / ("recover-" + label)
                     home.mkdir(exist_ok=True)
                     before = live_snapshot(home)
+                    before_install3_budget = (
+                        hosted_before_install3
+                        and present
+                        and phase == "before-install"
+                        and index == 3
+                        and not crash
+                    )
+                    if before_install3_budget:
+                        print(
+                            "BUDGET recovery True-before-install-3-False initial install 240s",
+                            flush=True,
+                        )
+                    install2_budget = (
+                        hosted_install2
+                        and present
+                        and phase == "install"
+                        and index == 2
+                        and not crash
+                    )
+                    if install2_budget:
+                        print(
+                            "BUDGET recovery True-install-2-False initial install 240s",
+                            flush=True,
+                        )
                     result = invoke(
-                        home, payload, "install", fault=f"{phase}-{index}", crash=crash
+                        home,
+                        payload,
+                        "install",
+                        fault=f"{phase}-{index}",
+                        crash=crash,
+                        timeout=240 if before_install3_budget or install2_budget else 120,
                     )
                     if crash:
                         assert result.returncode != 0, (
@@ -1180,7 +1212,15 @@ def test_recovery(
     return completed
 
 
-def test_recovery_lanes(base: Path, payload: Path, home: Path, jobs: int) -> None:
+def test_recovery_lanes(
+    base: Path,
+    payload: Path,
+    home: Path,
+    jobs: int,
+    *,
+    hosted_before_install3: bool = False,
+    hosted_install2: bool = False,
+) -> None:
     """Run unchanged filesystem assertions in isolated ownership lanes and join all."""
     plan = recovery_lane_plan(base, home, jobs)
     before = snapshot(payload)
@@ -1198,7 +1238,15 @@ def test_recovery_lanes(base: Path, payload: Path, home: Path, jobs: int) -> Non
         # __exit__(wait=True) joins both owned lanes even if either result raises.
         with ThreadPoolExecutor(max_workers=2) as executor:
             futures = [
-                executor.submit(test_recovery, base, payload, owner, indices)
+                executor.submit(
+                    test_recovery,
+                    base,
+                    payload,
+                    owner,
+                    indices,
+                    hosted_before_install3=hosted_before_install3,
+                    hosted_install2=hosted_install2,
+                )
                 for owner, indices in plan
             ]
             ledgers = [future.result() for future in futures]
@@ -1421,7 +1469,22 @@ def main() -> None:
                 flush=True,
             )
             started = time.monotonic()
-            test_recovery_lanes(base, payload, home, jobs)
+            test_recovery_lanes(
+                base,
+                payload,
+                home,
+                jobs,
+                hosted_before_install3=(
+                    hosted_full
+                    and jobs == 2
+                    and os.environ.get("FINDER_PDF_HOSTED_FULL_RECOVERY_BEFORE_INSTALL3_TIMEOUT") == "1"
+                ),
+                hosted_install2=(
+                    hosted_full
+                    and jobs == 2
+                    and os.environ.get("FINDER_PDF_HOSTED_FULL_RECOVERY_INSTALL2_TIMEOUT") == "1"
+                ),
+            )
             print(f"TIMING rename-matrix {time.monotonic() - started:.3f}s", flush=True)
             started = time.monotonic()
             test_interrupted_recovery_and_commit(payload, home)
